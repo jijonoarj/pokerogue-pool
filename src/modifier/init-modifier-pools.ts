@@ -132,6 +132,8 @@ function initCommonModifierPool() {
     new WeightedModifierType(modifierTypes.TEMP_STAT_STAGE_BOOSTER, 4),
     new WeightedModifierType(modifierTypes.BERRY, 2),
     new WeightedModifierType(modifierTypes.TM_COMMON, 2),
+    // moved VOUCHER from Great -> Common with weight 6
+    new WeightedModifierType(modifierTypes.VOUCHER, 6),
   ].map(m => {
     m.setTier(ModifierTier.COMMON);
     return m;
@@ -330,11 +332,8 @@ function initGreatModifierPool() {
       },
       4,
     ),
-    new WeightedModifierType(
-      modifierTypes.VOUCHER,
-      (_party: Pokemon[], rerollCount: number) => (!globalScene.gameMode.isDaily ? Math.max(1 - rerollCount, 0) : 0),
-      1,
-    ),
+    // moved VOUCHER_PLUS here from Rogue with weight 6
+    new WeightedModifierType(modifierTypes.VOUCHER_PLUS, 6),
   ].map(m => {
     m.setTier(ModifierTier.GREAT);
     return m;
@@ -416,9 +415,7 @@ function initUltraModifierPool() {
             const hasStatusMoves = [MoveId.FACADE, MoveId.PSYCHO_SHIFT].some(m => moveset.includes(m));
             // Moves that take advantage of being able to give the target a status orb
             // TODO: Take moves (Trick, Fling, Switcheroo) from comment when they are implemented
-            const hasItemMoves = [
-              /* MoveId.TRICK, MoveId.FLING, MoveId.SWITCHEROO */
-            ].some(m => moveset.includes(m));
+            const hasItemMoves = [/* MoveId.TRICK, MoveId.FLING, MoveId.SWITCHEROO */].some(m => moveset.includes(m));
 
             if (canSetStatus) {
               // Abilities that take advantage of obtaining the actual status effect, separated based on specificity to the orb
@@ -462,9 +459,7 @@ function initUltraModifierPool() {
             const hasStatusMoves = [MoveId.FACADE, MoveId.PSYCHO_SHIFT].some(m => moveset.includes(m));
             // Moves that take advantage of being able to give the target a status orb
             // TODO: Take moves (Trick, Fling, Switcheroo) from comment when they are implemented
-            const hasItemMoves = [
-              /* MoveId.TRICK, MoveId.FLING, MoveId.SWITCHEROO */
-            ].some(m => moveset.includes(m));
+            const hasItemMoves = [/* MoveId.TRICK, MoveId.FLING, MoveId.SWITCHEROO */].some(m => moveset.includes(m));
 
             if (canSetStatus) {
               // Abilities that take advantage of obtaining the actual status effect, separated based on specificity to the orb
@@ -562,6 +557,8 @@ function initUltraModifierPool() {
     ),
     new WeightedModifierType(modifierTypes.QUICK_CLAW, 3),
     new WeightedModifierType(modifierTypes.WIDE_LENS, 7),
+    // moved VOUCHER_PREMIUM from Master -> Ultra with weight 8
+    new WeightedModifierType(modifierTypes.VOUCHER_PREMIUM, 8),
   ].map(m => {
     m.setTier(ModifierTier.ULTRA);
     return m;
@@ -570,7 +567,8 @@ function initUltraModifierPool() {
 
 function initRogueModifierPool() {
   modifierPool[ModifierTier.ROGUE] = [
-    new WeightedModifierType(modifierTypes.ROGUE_BALL, () => (hasMaximumBalls(PokeballType.ROGUE_BALL) ? 0 : 16), 16),
+    // replaced ROGUE_BALL with MASTER_BALL (kept weight / behavior from rogue ball)
+    new WeightedModifierType(modifierTypes.MASTER_BALL, () => (hasMaximumBalls(PokeballType.MASTER_BALL) ? 0 : 16), 16),
     new WeightedModifierType(modifierTypes.RELIC_GOLD, skipInLastClassicWaveOrDefault(2)),
     new WeightedModifierType(modifierTypes.LEFTOVERS, 3),
     new WeightedModifierType(modifierTypes.SHELL_BELL, 3),
@@ -600,12 +598,7 @@ function initRogueModifierPool() {
       () => Math.min(Math.ceil(globalScene.currentBattle.waveIndex / 50), 4) * 9,
       36,
     ),
-    new WeightedModifierType(
-      modifierTypes.VOUCHER_PLUS,
-      (_party: Pokemon[], rerollCount: number) =>
-        !globalScene.gameMode.isDaily ? Math.max(3 - rerollCount * 1, 0) : 0,
-      3,
-    ),
+    // removed VOUCHER_PLUS from Rogue pool (moved to Great pool)
   ].map(m => {
     m.setTier(ModifierTier.ROGUE);
     return m;
@@ -617,18 +610,10 @@ function initRogueModifierPool() {
  */
 function initMasterModifierPool() {
   modifierPool[ModifierTier.MASTER] = [
-    new WeightedModifierType(modifierTypes.MASTER_BALL, () => (hasMaximumBalls(PokeballType.MASTER_BALL) ? 0 : 24), 24),
+    // removed MASTER_BALL from Master pool (moved to Rogue pool)
     new WeightedModifierType(modifierTypes.SHINY_CHARM, 14),
     new WeightedModifierType(modifierTypes.HEALING_CHARM, 18),
     new WeightedModifierType(modifierTypes.MULTI_LENS, 18),
-    new WeightedModifierType(
-      modifierTypes.VOUCHER_PREMIUM,
-      (_party: Pokemon[], rerollCount: number) =>
-        !globalScene.gameMode.isDaily && !globalScene.gameMode.isEndless && !globalScene.gameMode.isSplicedOnly
-          ? Math.max(5 - rerollCount * 2, 0)
-          : 0,
-      5,
-    ),
     new WeightedModifierType(
       modifierTypes.DNA_SPLICERS,
       (party: Pokemon[]) =>
