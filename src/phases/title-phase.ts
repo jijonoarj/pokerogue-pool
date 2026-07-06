@@ -252,7 +252,7 @@ export class TitlePhase extends Phase {
 
         const modifiers: Modifier[] = new Array(3)
           .fill(null)
-          .map(() => modifierTypes.EXP_SHARE().withIdFromFunc(modifierTypes.EXP_SHARE).newModifier())
+          .map(() => modifierTypes.LUCK_CHARM().withIdFromFunc(modifierTypes.LUCK_CHARM).newModifier())
           .concat(
             new Array(3)
               .fill(null)

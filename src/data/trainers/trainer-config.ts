@@ -4812,7 +4812,7 @@ export const trainerConfigs: TrainerConfigs = {
     .setPartyTemplates(trainerPartyTemplates.RIVAL)
     .setModifierRewardFuncs(
       () => modifierTypes.SUPER_EXP_CHARM,
-      () => modifierTypes.EXP_SHARE,
+      () => modifierTypes.LUCK_CHARM,
     )
     .setPartyMemberFunc(0, getRandomRivalPartyMemberFunc(RIVAL_1_POOL, 0))
     .setPartyMemberFunc(1, getRandomRivalPartyMemberFunc(RIVAL_1_POOL, 1)),
@@ -4827,7 +4827,7 @@ export const trainerConfigs: TrainerConfigs = {
     .setBattleBgm("battle_rival")
     .setMixedBattleBgm("battle_rival")
     .setPartyTemplates(trainerPartyTemplates.RIVAL_2)
-    .setModifierRewardFuncs(() => modifierTypes.EXP_SHARE)
+    .setModifierRewardFuncs(() => modifierTypes.LUCK_CHARM)
     .setPartyMemberFunc(0, getRandomRivalPartyMemberFunc(RIVAL_2_POOL, 0))
     .setPartyMemberFunc(1, getRandomRivalPartyMemberFunc(RIVAL_2_POOL, 1))
     .setPartyMemberFunc(2, getRandomRivalPartyMemberFunc(RIVAL_2_POOL, 2)),

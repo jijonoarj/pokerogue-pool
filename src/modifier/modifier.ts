@@ -2447,6 +2447,24 @@ export class HealingBoosterModifier extends PersistentModifier {
   }
 }
 
+export class LuckBoosterModifier extends PersistentModifier {
+  match(modifier: Modifier): boolean {
+    return modifier instanceof LuckBoosterModifier;
+  }
+
+  clone(): LuckBoosterModifier {
+    return new LuckBoosterModifier(this.type, this.stackCount);
+  }
+
+  override apply(): boolean {
+    return true;
+  }
+
+  getMaxStackCount(): number {
+    return 14;
+  }
+}
+
 export class ExpBoosterModifier extends PersistentModifier {
   private boostMultiplier: number;
 
@@ -3847,6 +3865,7 @@ const ModifierClassMap = Object.freeze({
   FusePokemonModifier,
   MultipleParticipantExpBonusModifier,
   HealingBoosterModifier,
+  LuckBoosterModifier,
   ExpBoosterModifier,
   PokemonExpBoosterModifier,
   ExpShareModifier,

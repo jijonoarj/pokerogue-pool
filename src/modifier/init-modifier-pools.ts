@@ -334,6 +334,8 @@ function initGreatModifierPool() {
     ),
     // moved VOUCHER_PLUS here from Rogue with weight 6
     new WeightedModifierType(modifierTypes.VOUCHER_PLUS, 6),
+    // moved LUCK_CHARM here from Ultra (weight 10) — much more frequent at Great tier
+    new WeightedModifierType(modifierTypes.LUCK_CHARM, 10),
   ].map(m => {
     m.setTier(ModifierTier.GREAT);
     return m;
@@ -415,7 +417,9 @@ function initUltraModifierPool() {
             const hasStatusMoves = [MoveId.FACADE, MoveId.PSYCHO_SHIFT].some(m => moveset.includes(m));
             // Moves that take advantage of being able to give the target a status orb
             // TODO: Take moves (Trick, Fling, Switcheroo) from comment when they are implemented
-            const hasItemMoves = [/* MoveId.TRICK, MoveId.FLING, MoveId.SWITCHEROO */].some(m => moveset.includes(m));
+            const hasItemMoves = [
+              /* MoveId.TRICK, MoveId.FLING, MoveId.SWITCHEROO */
+            ].some(m => moveset.includes(m));
 
             if (canSetStatus) {
               // Abilities that take advantage of obtaining the actual status effect, separated based on specificity to the orb
@@ -459,7 +463,9 @@ function initUltraModifierPool() {
             const hasStatusMoves = [MoveId.FACADE, MoveId.PSYCHO_SHIFT].some(m => moveset.includes(m));
             // Moves that take advantage of being able to give the target a status orb
             // TODO: Take moves (Trick, Fling, Switcheroo) from comment when they are implemented
-            const hasItemMoves = [/* MoveId.TRICK, MoveId.FLING, MoveId.SWITCHEROO */].some(m => moveset.includes(m));
+            const hasItemMoves = [
+              /* MoveId.TRICK, MoveId.FLING, MoveId.SWITCHEROO */
+            ].some(m => moveset.includes(m));
 
             if (canSetStatus) {
               // Abilities that take advantage of obtaining the actual status effect, separated based on specificity to the orb
@@ -546,7 +552,6 @@ function initUltraModifierPool() {
     new WeightedModifierType(modifierTypes.GOLDEN_PUNCH, skipInLastClassicWaveOrDefault(2)),
     new WeightedModifierType(modifierTypes.IV_SCANNER, skipInLastClassicWaveOrDefault(4)),
     new WeightedModifierType(modifierTypes.EXP_CHARM, skipInLastClassicWaveOrDefault(8)),
-    new WeightedModifierType(modifierTypes.EXP_SHARE, skipInLastClassicWaveOrDefault(10)),
     new WeightedModifierType(
       modifierTypes.TERA_ORB,
       () =>
@@ -578,25 +583,25 @@ function initRogueModifierPool() {
     new WeightedModifierType(modifierTypes.BATON, 2),
     new WeightedModifierType(modifierTypes.SOUL_DEW, 7),
     new WeightedModifierType(modifierTypes.CATCHING_CHARM, () => (!globalScene.gameMode.isClassic ? 4 : 0), 4),
-    new WeightedModifierType(modifierTypes.ABILITY_CHARM, skipInClassicAfterWave(189, 6)),
+    new WeightedModifierType(modifierTypes.ABILITY_CHARM, skipInClassicAfterWave(189, 2)),
     new WeightedModifierType(modifierTypes.FOCUS_BAND, 5),
     new WeightedModifierType(modifierTypes.KINGS_ROCK, 3),
     new WeightedModifierType(modifierTypes.LOCK_CAPSULE, () => (globalScene.gameMode.isClassic ? 0 : 3)),
     new WeightedModifierType(modifierTypes.SUPER_EXP_CHARM, skipInLastClassicWaveOrDefault(8)),
     new WeightedModifierType(
       modifierTypes.RARE_FORM_CHANGE_ITEM,
-      () => Math.min(Math.ceil(globalScene.currentBattle.waveIndex / 50), 4) * 6,
-      24,
+      () => Math.min(Math.ceil(globalScene.currentBattle.waveIndex / 50), 4) * 7,
+      28,
     ),
     new WeightedModifierType(
       modifierTypes.MEGA_BRACELET,
-      () => Math.min(Math.ceil(globalScene.currentBattle.waveIndex / 50), 4) * 9,
-      36,
+      () => Math.min(Math.ceil(globalScene.currentBattle.waveIndex / 50), 4) * 11,
+      44,
     ),
     new WeightedModifierType(
       modifierTypes.DYNAMAX_BAND,
-      () => Math.min(Math.ceil(globalScene.currentBattle.waveIndex / 50), 4) * 9,
-      36,
+      () => Math.min(Math.ceil(globalScene.currentBattle.waveIndex / 50), 4) * 11,
+      44,
     ),
     // removed VOUCHER_PLUS from Rogue pool (moved to Great pool)
   ].map(m => {
@@ -611,18 +616,19 @@ function initRogueModifierPool() {
 function initMasterModifierPool() {
   modifierPool[ModifierTier.MASTER] = [
     // removed MASTER_BALL from Master pool (moved to Rogue pool)
-    new WeightedModifierType(modifierTypes.SHINY_CHARM, 14),
+    new WeightedModifierType(modifierTypes.SHINY_CHARM, 2),
     new WeightedModifierType(modifierTypes.HEALING_CHARM, 18),
     new WeightedModifierType(modifierTypes.MULTI_LENS, 18),
+    new WeightedModifierType(modifierTypes.MYSTERY_ENCOUNTER_MACHO_BRACE, 8),
     new WeightedModifierType(
       modifierTypes.DNA_SPLICERS,
       (party: Pokemon[]) =>
         !(globalScene.gameMode.isClassic && timedEventManager.areFusionsBoosted())
         && !globalScene.gameMode.isSplicedOnly
         && party.filter(p => !p.fusionSpecies).length > 1
-          ? 24
+          ? 2
           : 0,
-      24,
+      2,
     ),
     new WeightedModifierType(
       modifierTypes.MINI_BLACK_HOLE,
@@ -630,9 +636,9 @@ function initMasterModifierPool() {
         globalScene.gameMode.isDaily
         || (!globalScene.gameMode.isFreshStartChallenge()
           && globalScene.gameData.isUnlocked(Unlockables.MINI_BLACK_HOLE))
-          ? 1
+          ? 8
           : 0,
-      1,
+      8,
     ),
   ].map(m => {
     m.setTier(ModifierTier.MASTER);

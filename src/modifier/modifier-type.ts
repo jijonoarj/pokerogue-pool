@@ -69,6 +69,7 @@ import {
   IvScannerModifier,
   LevelIncrementBoosterModifier,
   LockModifierTiersModifier,
+  LuckBoosterModifier,
   MapModifier,
   MegaEvolutionAccessModifier,
   type Modifier,
@@ -2109,6 +2110,8 @@ const modifierTypeInitObj = Object.freeze({
       "healing_charm",
       (type, _args) => new HealingBoosterModifier(type, 1.1),
     ),
+  LUCK_CHARM: () =>
+    new ModifierType("modifierType:ModifierType.LUCK_CHARM", "scanner", (type, _args) => new LuckBoosterModifier(type)),
   CANDY_JAR: () =>
     new ModifierType(
       "modifierType:ModifierType.CANDY_JAR",
@@ -2925,10 +2928,12 @@ export function getPartyLuckValue(party: readonly Pokemon[]): number {
   }
 
   const eventSpecies = timedEventManager.getEventLuckBoostedSpecies();
+  const luckCharm = globalScene.findModifier(m => m instanceof LuckBoosterModifier) as LuckBoosterModifier | undefined;
+  const luckCharmStack = luckCharm?.getStackCount() ?? 0;
   const luck = Phaser.Math.Clamp(
     party
       .map(p => (p.isAllowedInBattle() ? p.getLuck() + (eventSpecies.includes(p.species.speciesId) ? 1 : 0) : 0))
-      .reduce((total: number, value: number) => (total += value), 0),
+      .reduce((total: number, value: number) => (total += value), 0) + luckCharmStack,
     0,
     14,
   );

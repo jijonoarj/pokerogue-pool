@@ -83,7 +83,7 @@ export class VictoryPhase extends PokemonPhase {
         } else {
           const superExpWave = !gameMode.isEndless ? (globalScene.offsetGym ? 0 : 20) : 10;
           if (gameMode.isEndless && currentWaveIndex === 10) {
-            globalScene.phaseManager.pushNew("ModifierRewardPhase", modifierTypes.EXP_SHARE);
+            globalScene.phaseManager.pushNew("ModifierRewardPhase", modifierTypes.LUCK_CHARM);
           }
           if (gameMode.isClassic && currentWaveIndex === 10) {
             globalScene.phaseManager.pushNew("ModifierRewardPhase", modifierTypes.EXP_CHARM);
