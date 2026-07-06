@@ -3213,8 +3213,10 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
   }
 
   updateInfo(instant?: boolean): Promise<void> {
-    if (this.battleInfo.data == null) {
+    if (!this.battleInfo.scene) {
       // hack to prevent crash when pokemon is deleted
+      // (a live BattleInfo never enables its DataManager, so checking `data == null`
+      // skipped updates for every battle info; Phaser clears `scene` on destroy)
       return Promise.resolve();
     }
     return this.battleInfo.updateInfo(this, instant);
