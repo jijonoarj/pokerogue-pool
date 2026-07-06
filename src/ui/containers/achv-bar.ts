@@ -1,3 +1,4 @@
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import type { PlayerGender } from "#enums/player-gender";
 import { TextStyle } from "#enums/text-style";
@@ -52,9 +53,7 @@ export class AchvBar extends Phaser.GameObjects.Container {
       fontSize: "72px",
     });
     this.descriptionText.setOrigin(0).setWordWrapWidth(664).setLineSpacing(-5);
-    this.add(this.descriptionText);
-
-    this.setScale(0.5);
+    this.add(this.descriptionText).setScale(0.5);
 
     this.shown = false;
   }
@@ -98,7 +97,7 @@ export class AchvBar extends Phaser.GameObjects.Container {
     );
     this.icon.y = this.bg.height / 2 - this.icon.height / 2;
 
-    globalScene.playSound("se/achv");
+    audioManager.playSound("se/achv");
 
     globalScene.tweens.add({
       targets: this,

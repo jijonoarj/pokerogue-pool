@@ -1,13 +1,12 @@
 import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
-// biome-ignore-start lint/correctness/noUnusedImports: TSDoc
 import type { ArenaTag } from "#data/arena-tag";
-// biome-ignore-end lint/correctness/noUnusedImports: TSDoc
 import { allMoves } from "#data/data-lists";
 import type { BattlerIndex } from "#enums/battler-index";
 import type { MoveId } from "#enums/move-id";
 import { MoveUseMode } from "#enums/move-use-mode";
 import { PositionalTagType } from "#enums/positional-tag-type";
+import type { Stat } from "#enums/stat";
 import type { Pokemon } from "#field/pokemon";
 import i18next from "i18next";
 
@@ -47,7 +46,7 @@ export abstract class PositionalTag implements PositionalTagBaseArgs {
   public turnCount: number;
   public readonly targetIndex: BattlerIndex;
 
-  constructor({ turnCount, targetIndex }: PositionalTagBaseArgs) {
+  protected constructor({ turnCount, targetIndex }: PositionalTagBaseArgs) {
     this.turnCount = turnCount;
     this.targetIndex = targetIndex;
   }
@@ -92,7 +91,7 @@ export class DelayedAttackTag extends PositionalTag implements DelayedAttackArgs
   public readonly sourceMove: MoveId;
   public readonly sourceId: number;
 
-  constructor({ sourceId, turnCount, targetIndex, sourceMove }: DelayedAttackArgs) {
+  public constructor({ sourceId, turnCount, targetIndex, sourceMove }: DelayedAttackArgs) {
     super({ turnCount, targetIndex });
     this.sourceId = sourceId;
     this.sourceMove = sourceMove;
@@ -101,10 +100,8 @@ export class DelayedAttackTag extends PositionalTag implements DelayedAttackArgs
   public override trigger(): void {
     // Bangs are justified as the `shouldTrigger` method will queue the tag for removal
     // if the source or target no longer exist
-    const source = globalScene.getPokemonById(this.sourceId)!;
     const target = this.getTarget()!;
 
-    source.turnData.extraTurns++;
     globalScene.phaseManager.queueMessage(
       i18next.t("moveTriggers:tookMoveAttack", {
         pokemonName: getPokemonNameWithAffix(target),
@@ -114,7 +111,9 @@ export class DelayedAttackTag extends PositionalTag implements DelayedAttackArgs
 
     globalScene.phaseManager.unshiftNew(
       "MoveEffectPhase",
-      this.sourceId, // TODO: Find an alternate method of passing the source pokemon without a source ID
+      // TODO: Find an alternate method of passing the (currently off-field) source pokemon
+      // instead of relying on pokemon getter jank
+      this.sourceId,
       [this.targetIndex],
       allMoves[this.sourceMove],
       MoveUseMode.DELAYED_ATTACK,

@@ -1,10 +1,6 @@
-/* biome-ignore-start lint/correctness/noUnusedImports: tsdoc imports */
-import type { initModifierTypes } from "#modifiers/modifier-type";
-/* biome-ignore-end lint/correctness/noUnusedImports: tsdoc imports */
-
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
-import { pokemonEvolutions } from "#balance/pokemon-evolutions";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { modifierTypes } from "#data/data-lists";
 import { MAX_PER_TYPE_POKEBALLS } from "#data/pokeball";
 import { AbilityId } from "#enums/ability-id";
@@ -29,6 +25,7 @@ import {
   trainerModifierPool,
   wildModifierPool,
 } from "#modifiers/modifier-pools";
+import type { initModifierTypes } from "#modifiers/modifier-type";
 import { WeightedModifierType } from "#modifiers/modifier-type";
 import type { WeightedModifierTypeWeightFunc } from "#types/modifier-types";
 
@@ -297,14 +294,10 @@ function initGreatModifierPool() {
     new WeightedModifierType(modifierTypes.TM_GREAT, 3),
     new WeightedModifierType(
       modifierTypes.MEMORY_MUSHROOM,
-      (party: Pokemon[]) => {
-        if (!party.find(p => p.getLearnableLevelMoves().length)) {
-          return 0;
-        }
-        const highestPartyLevel = party
-          .map(p => p.level)
-          .reduce((highestLevel: number, level: number) => Math.max(highestLevel, level), 1);
-        return Math.min(Math.ceil(highestPartyLevel / 20), 4);
+      () => {
+        const { waveIndex } = globalScene.currentBattle;
+        const modeAdjustedWave = globalScene.gameMode.getWaveForDifficulty(waveIndex, true);
+        return Math.min(1 + Math.floor(modeAdjustedWave / 30), 4);
       },
       4,
     ),
@@ -319,7 +312,7 @@ function initGreatModifierPool() {
     ),
     new WeightedModifierType(
       modifierTypes.DNA_SPLICERS,
-      (party: Pokemon[]) => {
+      (party: readonly Pokemon[]) => {
         if (party.filter(p => !p.fusionSpecies).length > 1) {
           if (globalScene.gameMode.isSplicedOnly) {
             return 4;
@@ -332,7 +325,7 @@ function initGreatModifierPool() {
       },
       4,
     ),
-    // moved VOUCHER_PLUS here from Rogue with weight 6
+    // moved VOUCHER_PLUS here from Rogue with weight 6 (replaces base VOUCHER)
     new WeightedModifierType(modifierTypes.VOUCHER_PLUS, 6),
     // moved LUCK_CHARM here from Ultra (weight 10) — much more frequent at Great tier
     new WeightedModifierType(modifierTypes.LUCK_CHARM, 10),
@@ -370,8 +363,8 @@ function initUltraModifierPool() {
           // Check if Pokemon's species (or fusion species, if applicable) can evolve or if they're G-Max'd
           if (
             !p.isMax()
-            && (p.getSpeciesForm(true).speciesId in pokemonEvolutions
-              || (p.isFusion() && p.getFusionSpeciesForm(true).speciesId in pokemonEvolutions))
+            && (speciesDataRegistry.hasEvolutions(p.getSpeciesForm(true).speciesId)
+              || (p.isFusion() && speciesDataRegistry.hasEvolutions(p.getFusionSpeciesForm(true).speciesId)))
           ) {
             // Check if Pokemon is already holding an Eviolite
             return !p.getHeldItems().some(i => i.type.id === "EVIOLITE");
@@ -555,9 +548,9 @@ function initUltraModifierPool() {
     new WeightedModifierType(
       modifierTypes.TERA_ORB,
       () =>
-        !globalScene.gameMode.isClassic
-          ? Math.min(Math.max(Math.floor(globalScene.currentBattle.waveIndex / 50) * 2, 1), 4)
-          : 0,
+        globalScene.gameMode.isClassic
+          ? 0
+          : Math.min(Math.max(Math.floor(globalScene.currentBattle.waveIndex / 50) * 2, 1), 4),
       4,
     ),
     new WeightedModifierType(modifierTypes.QUICK_CLAW, 3),
@@ -582,7 +575,7 @@ function initRogueModifierPool() {
     new WeightedModifierType(modifierTypes.SCOPE_LENS, 4),
     new WeightedModifierType(modifierTypes.BATON, 2),
     new WeightedModifierType(modifierTypes.SOUL_DEW, 7),
-    new WeightedModifierType(modifierTypes.CATCHING_CHARM, () => (!globalScene.gameMode.isClassic ? 4 : 0), 4),
+    new WeightedModifierType(modifierTypes.CATCHING_CHARM, () => (globalScene.gameMode.isClassic ? 0 : 4), 4),
     new WeightedModifierType(modifierTypes.ABILITY_CHARM, skipInClassicAfterWave(189, 2)),
     new WeightedModifierType(modifierTypes.FOCUS_BAND, 5),
     new WeightedModifierType(modifierTypes.KINGS_ROCK, 3),

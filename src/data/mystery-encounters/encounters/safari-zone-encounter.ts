@@ -1,4 +1,5 @@
 import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
 import { NON_LEGEND_PARADOX_POKEMON } from "#balance/special-species-groups";
@@ -102,11 +103,12 @@ export const SafariZoneEncounter: MysteryEncounter = MysteryEncounterBuilder.wit
         };
         updatePlayerMoney(-(encounter.options[0].requirements[0] as MoneyRequirement).requiredMoney);
         // Load bait/mud assets
-        globalScene.loadSe("PRSFX- Bug Bite", "battle_anims", "PRSFX- Bug Bite.wav");
-        globalScene.loadSe("PRSFX- Sludge Bomb2", "battle_anims", "PRSFX- Sludge Bomb2.wav");
-        globalScene.loadSe("PRSFX- Taunt2", "battle_anims", "PRSFX- Taunt2.wav");
-        globalScene.loadAtlas("safari_zone_bait", "mystery-encounters");
-        globalScene.loadAtlas("safari_zone_mud", "mystery-encounters");
+        globalScene
+          .loadSe("PRSFX- Bug Bite", "battle_anims", "PRSFX- Bug Bite.wav")
+          .loadSe("PRSFX- Sludge Bomb2", "battle_anims", "PRSFX- Sludge Bomb2.wav")
+          .loadSe("PRSFX- Taunt2", "battle_anims", "PRSFX- Taunt2.wav")
+          .loadAtlas("safari_zone_bait", "mystery-encounters")
+          .loadAtlas("safari_zone_mud", "mystery-encounters");
         // Clear enemy party
         globalScene.currentBattle.enemyParty = [];
         await transitionMysteryEncounterIntroVisuals();
@@ -210,10 +212,10 @@ const safariZoneGameOptions: MysteryEncounterOption[] = [
       tryChangeCatchStage(2);
       // 80% chance to increase flee stage +1
       const fleeChangeResult = tryChangeFleeStage(1, 8);
-      if (!fleeChangeResult) {
-        await showEncounterText(getEncounterText(`${namespace}:safari.busyEating`) ?? "", null, 1000, false);
-      } else {
+      if (fleeChangeResult) {
         await showEncounterText(getEncounterText(`${namespace}:safari.eating`) ?? "", null, 1000, false);
+      } else {
+        await showEncounterText(getEncounterText(`${namespace}:safari.busyEating`) ?? "", null, 1000, false);
       }
 
       await doEndTurn(1);
@@ -238,10 +240,10 @@ const safariZoneGameOptions: MysteryEncounterOption[] = [
       tryChangeFleeStage(-2);
       // 80% chance to decrease catch stage -1
       const catchChangeResult = tryChangeCatchStage(-1, 8);
-      if (!catchChangeResult) {
-        await showEncounterText(getEncounterText(`${namespace}:safari.besideItselfAngry`) ?? "", null, 1000, false);
-      } else {
+      if (catchChangeResult) {
         await showEncounterText(getEncounterText(`${namespace}:safari.angry`) ?? "", null, 1000, false);
+      } else {
+        await showEncounterText(getEncounterText(`${namespace}:safari.besideItselfAngry`) ?? "", null, 1000, false);
       }
 
       await doEndTurn(2);
@@ -372,7 +374,7 @@ async function throwBait(pokemon: EnemyPokemon): Promise<boolean> {
       `trainer_${globalScene.gameData.gender === PlayerGender.FEMALE ? "f" : "m"}_back_pb`,
     );
     globalScene.time.delayedCall(TRAINER_THROW_ANIMATION_TIMES[0], () => {
-      globalScene.playSound("se/pb_throw");
+      audioManager.playSound("se/pb_throw");
 
       // Trainer throw frames
       globalScene.trainer.setFrame("2");
@@ -402,12 +404,12 @@ async function throwBait(pokemon: EnemyPokemon): Promise<boolean> {
               y: originalY - 5,
               loop: 6,
               onStart: () => {
-                globalScene.playSound("battle_anims/PRSFX- Bug Bite");
+                audioManager.playSound("battle_anims/PRSFX- Bug Bite");
                 bait.setFrame("0002.png");
               },
               onLoop: () => {
                 if (index % 2 === 0) {
-                  globalScene.playSound("battle_anims/PRSFX- Bug Bite");
+                  audioManager.playSound("battle_anims/PRSFX- Bug Bite");
                 }
                 if (index === 4) {
                   bait.setFrame("0003.png");
@@ -441,7 +443,7 @@ async function throwMud(pokemon: EnemyPokemon): Promise<boolean> {
       `trainer_${globalScene.gameData.gender === PlayerGender.FEMALE ? "f" : "m"}_back_pb`,
     );
     globalScene.time.delayedCall(TRAINER_THROW_ANIMATION_TIMES[0], () => {
-      globalScene.playSound("se/pb_throw");
+      audioManager.playSound("se/pb_throw");
 
       // Trainer throw frames
       globalScene.trainer.setFrame("2");
@@ -462,7 +464,7 @@ async function throwMud(pokemon: EnemyPokemon): Promise<boolean> {
         duration: 500,
         onComplete: () => {
           // Mud frame 2
-          globalScene.playSound("battle_anims/PRSFX- Sludge Bomb2");
+          audioManager.playSound("battle_anims/PRSFX- Sludge Bomb2");
           mud.setFrame("0002.png");
           // Mud splat
           globalScene.time.delayedCall(200, () => {
@@ -488,10 +490,10 @@ async function throwMud(pokemon: EnemyPokemon): Promise<boolean> {
                 y: originalY - 20,
                 loop: 1,
                 onStart: () => {
-                  globalScene.playSound("battle_anims/PRSFX- Taunt2");
+                  audioManager.playSound("battle_anims/PRSFX- Taunt2");
                 },
                 onLoop: () => {
-                  globalScene.playSound("battle_anims/PRSFX- Taunt2");
+                  audioManager.playSound("battle_anims/PRSFX- Taunt2");
                 },
                 onComplete: () => {
                   resolve(true);

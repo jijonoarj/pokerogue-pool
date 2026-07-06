@@ -1,10 +1,7 @@
-// biome-ignore-start lint/correctness/noUnusedImports: Used in a TSDoc comment
 import type { AbilityBattlerTag, BattlerTagTypeMap, SerializableBattlerTag, TypeBoostTag } from "#data/battler-tags";
 import type { AbilityId } from "#enums/ability-id";
-import type { SessionSaveData } from "#types/save-data";
-// biome-ignore-end lint/correctness/noUnusedImports: Used in a TSDoc comment
-
 import type { BattlerTagType } from "#enums/battler-tag-type";
+import type { SessionSaveData } from "#types/save-data";
 import type { InferKeys, ObjectValues } from "#types/type-helpers";
 
 /**
@@ -19,11 +16,6 @@ export type MoveRestrictionBattlerTagType =
   | BattlerTagType.ENCORE
   | BattlerTagType.DISABLED
   | BattlerTagType.GORILLA_TACTICS;
-
-/**
- * Subset of {@linkcode BattlerTagType}s that block damage from moves.
- */
-export type FormBlockDamageBattlerTagType = BattlerTagType.ICE_FACE | BattlerTagType.DISGUISE;
 
 /**
  * Subset of {@linkcode BattlerTagType}s that are related to trapping effects.
@@ -46,11 +38,16 @@ export type TrappingBattlerTagType =
 /**
  * Subset of {@linkcode BattlerTagType}s that are related to protection effects.
  */
-export type ProtectionBattlerTagType = BattlerTagType.PROTECTED | BattlerTagType.SPIKY_SHIELD | DamageProtectedTagType;
+export type ProtectionBattlerTagType =
+  | BattlerTagType.PROTECTED
+  | BattlerTagType.SPIKY_SHIELD
+  | ContactSetStatusProtectedTagType
+  | DamageProtectedTagType;
+
 /**
  * Subset of {@linkcode BattlerTagType}s related to protection effects that block damage but not status moves.
  */
-export type DamageProtectedTagType = ContactSetStatusProtectedTagType | ContactStatStageChangeProtectedTagType;
+export type DamageProtectedTagType = ContactStatStageChangeProtectedTagType;
 
 /**
  * Subset of {@linkcode BattlerTagType}s related to protection effects that set a status effect on the attacker.
@@ -141,8 +138,9 @@ export type BattlerTagData = ObjectValues<BattlerTagDataMap>;
  * Dummy, typescript-only declaration to ensure that
  * {@linkcode BattlerTagTypeMap} has an entry for all `BattlerTagType`s.
  *
- * If a battler tag is missing from the map, Typescript will throw an error on this statement.
+ * If a tag type is missing from the map, TypeScript will throw an error on this statement.
  *
  * ⚠️ Does not actually exist at runtime, so it must not be used!
+ * @internal
  */
 declare const EnsureAllBattlerTagTypesAreMapped: BattlerTagTypeMap[BattlerTagType] & never;

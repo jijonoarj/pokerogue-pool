@@ -1,11 +1,11 @@
 import { DexAttr } from "#enums/dex-attr";
 import { SpeciesId } from "#enums/species-id";
 import type { SystemSaveData } from "#types/save-data";
-import type { SystemSaveMigrator } from "#types/system-save-migrator";
+import type { SystemSaveMigrator } from "#types/save-migrators";
 import { getPokemonSpecies } from "#utils/pokemon-utils";
 
 /**
- * If a starter is caught, but the only forms registered as caught are not starterSelectable,
+ * If pichu is caught, but the only forms registered as caught are not starterSelectable,
  * unlock the default form.
  * @param data - {@linkcode SystemSaveData}
  */

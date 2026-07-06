@@ -1,4 +1,4 @@
-import { pokerogueApi } from "#api/pokerogue-api";
+import { pokerogueApi } from "#api/api";
 import { globalScene } from "#app/global-scene";
 import { bypassLogin } from "#constants/app-constants";
 import { AdminMode } from "#enums/admin-mode";
@@ -6,11 +6,7 @@ import { Button } from "#enums/buttons";
 import { TextStyle } from "#enums/text-style";
 import { UiMode } from "#enums/ui-mode";
 import { GameData } from "#system/game-data";
-import type {
-  AdminUiHandlerService,
-  AdminUiHandlerServiceMode,
-  SearchAccountResponse,
-} from "#types/api/pokerogue-admin-api";
+import type { AdminUiHandlerService, AdminUiHandlerServiceMode, SearchAccountResponse } from "#types/api";
 import type { InputFieldConfig } from "#ui/form-modal-ui-handler";
 import { FormModalUiHandler } from "#ui/form-modal-ui-handler";
 import type { ModalConfig } from "#ui/modal-ui-handler";

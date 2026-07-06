@@ -1,12 +1,13 @@
-import { pokerogueApi } from "#api/pokerogue-api";
+import { pokerogueApi } from "#api/api";
 import { loggedInUser } from "#app/account";
 import { GameMode, getGameMode } from "#app/game-mode";
+import { audioManager } from "#app/global-audio-manager";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
-import Overrides from "#app/overrides";
+import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
 import { bypassLogin } from "#constants/app-constants";
-import { getDailyRunStarters } from "#data/daily-run";
+import { getDailyRunStarters, startDailyEventChallenges } from "#data/daily-seed/daily-run";
 import { modifierTypes } from "#data/data-lists";
 import { Gender } from "#data/gender";
 import { BattleType } from "#enums/battle-type";
@@ -18,51 +19,74 @@ import { getBiomeKey } from "#field/arena";
 import type { Modifier } from "#modifiers/modifier";
 import { getDailyRunStarterModifiers, regenerateModifierPoolThresholds } from "#modifiers/modifier-type";
 import { vouchers } from "#system/voucher";
-import type { SessionSaveData } from "#types/save-data";
-import type { OptionSelectConfig, OptionSelectItem } from "#ui/abstract-option-select-ui-handler";
+import type { OptionSelectConfig, OptionSelectItem } from "#ui/base-option-select-ui-handler";
 import { SaveSlotUiMode } from "#ui/save-slot-select-ui-handler";
 import { isLocalServerConnected } from "#utils/common";
 import { getPokemonSpecies } from "#utils/pokemon-utils";
 import i18next from "i18next";
 
+const NO_SAVE_SLOT = -1;
+
 export class TitlePhase extends Phase {
   public readonly phaseName = "TitlePhase";
   private loaded = false;
-  private lastSessionData: SessionSaveData;
+  // TODO: Make `end` take a `GameModes` as a parameter rather than storing it on the class itself
   public gameMode: GameModes;
 
-  start(): void {
+  async start(): Promise<void> {
     super.start();
 
     globalScene.ui.clearText();
     globalScene.ui.fadeIn(250);
 
-    globalScene.playBgm("title", true);
+    const now = new Date();
+    if (now.getMonth() === 11 || (now.getMonth() === 0 && now.getDate() <= 15)) {
+      audioManager.playBgm("winter_title", true);
+    } else {
+      audioManager.playBgm("title", true);
+    }
 
-    globalScene.gameData
-      .getSession(loggedInUser?.lastSessionSlot ?? -1)
-      .then(sessionData => {
-        if (sessionData) {
-          this.lastSessionData = sessionData;
-          const biomeKey = getBiomeKey(sessionData.arena.biome);
-          const bgTexture = `${biomeKey}_bg`;
-          globalScene.arenaBg.setTexture(bgTexture);
-        }
-        this.showOptions();
-      })
-      .catch(err => {
-        console.error(err);
-        this.showOptions();
-      });
+    const lastSlot = await this.checkLastSaveSlot();
+    await this.showOptions(lastSlot);
   }
 
-  showOptions(): void {
+  /**
+   * If a user is logged in, check the last save slot they loaded and adjust various variables
+   * to account for it.
+   * @returns A Promise that resolves with the last loaded session's slot ID.
+   * Returns `NO_SAVE_SLOT` if not logged in or no session was found.
+   */
+  private async checkLastSaveSlot(): Promise<number> {
+    if (loggedInUser == null) {
+      return NO_SAVE_SLOT;
+    }
+    try {
+      const sessionData = await globalScene.gameData.getSession(loggedInUser.lastSessionSlot);
+      if (!sessionData) {
+        return NO_SAVE_SLOT;
+      }
+
+      globalScene.sessionSlotId = loggedInUser.lastSessionSlot;
+      // Set the BG texture to the last save's current biome
+      const biomeKey = getBiomeKey(sessionData.arena.biome);
+      const bgTexture = `${biomeKey}_bg`;
+      await globalScene.loadBiomeAssets(sessionData.arena.biome);
+      globalScene.arenaBg.setTexture(bgTexture);
+      return loggedInUser.lastSessionSlot;
+    } catch (err) {
+      console.error(err);
+      return NO_SAVE_SLOT;
+    }
+  }
+
+  private async showOptions(lastSessionSlot: number): Promise<void> {
     const options: OptionSelectItem[] = [];
-    if (loggedInUser && loggedInUser.lastSessionSlot > -1) {
+    // Add a "continue" menu if the session slot ID is >-1
+    if (lastSessionSlot > NO_SAVE_SLOT) {
       options.push({
         label: i18next.t("continue", { ns: "menu" }),
         handler: () => {
-          this.loadSaveSlot(this.lastSessionData || !loggedInUser ? -1 : loggedInUser.lastSessionSlot);
+          this.loadSaveSlot(lastSessionSlot);
           return true;
         },
       });
@@ -139,8 +163,9 @@ export class TitlePhase extends Phase {
         label: i18next.t("menu:loadGame"),
         handler: () => {
           globalScene.ui.setOverlayMode(UiMode.SAVE_SLOT, SaveSlotUiMode.LOAD, (slotId: number) => {
-            if (slotId === -1) {
-              return this.showOptions();
+            if (slotId === NO_SAVE_SLOT) {
+              console.warn("Attempted to load save slot of -1 through load game menu!");
+              return this.showOptions(slotId);
             }
             this.loadSaveSlot(slotId);
           });
@@ -169,30 +194,27 @@ export class TitlePhase extends Phase {
       noCancel: true,
       yOffset: 47,
     };
-    globalScene.ui.setMode(UiMode.TITLE, config);
+    await globalScene.ui.setMode(UiMode.TITLE, config);
   }
 
-  loadSaveSlot(slotId: number): void {
-    globalScene.sessionSlotId = slotId > -1 || !loggedInUser ? slotId : loggedInUser.lastSessionSlot;
+  // TODO: Make callers actually wait for the save slot to load
+  private async loadSaveSlot(slotId: number): Promise<void> {
+    // TODO: Do we need to `await` this?
     globalScene.ui.setMode(UiMode.MESSAGE);
     globalScene.ui.resetModeChain();
-    globalScene.gameData
-      .loadSession(slotId, slotId === -1 ? this.lastSessionData : undefined)
-      .then((success: boolean) => {
-        if (success) {
-          this.loaded = true;
-          if (loggedInUser) {
-            loggedInUser.lastSessionSlot = slotId;
-          }
-          globalScene.ui.showText(i18next.t("menu:sessionSuccess"), null, () => this.end());
-        } else {
-          this.end();
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        globalScene.ui.showText(i18next.t("menu:failedToLoadSession"), null);
-      });
+    globalScene.sessionSlotId = slotId;
+    try {
+      const success = await globalScene.gameData.loadSession(slotId);
+      if (success) {
+        this.loaded = true;
+        globalScene.ui.showText(i18next.t("menu:sessionSuccess"), null, () => this.end());
+      } else {
+        this.end();
+      }
+    } catch (err) {
+      console.error(err);
+      globalScene.ui.showText(i18next.t("menu:failedToLoadSession"), null);
+    }
   }
 
   initDailyRun(): void {
@@ -208,25 +230,28 @@ export class TitlePhase extends Phase {
 
       const generateDaily = (seed: string) => {
         globalScene.gameMode = getGameMode(GameModes.DAILY);
+
+        seed = globalScene.gameMode.trySetCustomDailyConfig(seed);
+
         // Daily runs don't support all challenges yet (starter select restrictions aren't considered)
-        globalScene.eventManager.startEventChallenges();
+        startDailyEventChallenges();
 
         globalScene.setSeed(seed);
         globalScene.resetSeed();
 
         globalScene.money = globalScene.gameMode.getStartingMoney();
 
-        const starters = getDailyRunStarters(seed);
+        const starters = getDailyRunStarters();
         const startingLevel = globalScene.gameMode.getStartingLevel();
 
         // TODO: Dedupe this
         const party = globalScene.getPlayerParty();
         const loadPokemonAssets: Promise<void>[] = [];
-        for (const starter of starters) {
+        for (const [index, starter] of starters.entries()) {
           const species = getPokemonSpecies(starter.speciesId);
           const starterFormIndex = starter.formIndex;
           const starterGender =
-            species.malePercent !== null ? (starter.female ? Gender.FEMALE : Gender.MALE) : Gender.GENDERLESS;
+            species.malePercent === null ? Gender.GENDERLESS : starter.female ? Gender.FEMALE : Gender.MALE;
           const starterPokemon = globalScene.addPlayerPokemon(
             species,
             startingLevel,
@@ -242,6 +267,14 @@ export class TitlePhase extends Phase {
           if (starter.moveset) {
             // avoid validating daily run starter movesets which are pre-populated already
             starterPokemon.tryPopulateMoveset(starter.moveset, true);
+          }
+
+          const customStarterConfig = globalScene.gameMode.dailyConfig?.starters?.[index];
+          if (customStarterConfig?.ability != null) {
+            starterPokemon.customPokemonData.ability = customStarterConfig.ability;
+          }
+          if (customStarterConfig?.passive != null) {
+            starterPokemon.customPokemonData.passive = customStarterConfig.passive;
           }
 
           party.push(starterPokemon);
@@ -278,10 +311,13 @@ export class TitlePhase extends Phase {
         }
         globalScene.updateModifiers(true, true);
 
-        Promise.all(loadPokemonAssets).then(() => {
-          globalScene.time.delayedCall(500, () => globalScene.playBgm());
+        Promise.all(loadPokemonAssets).then(async () => {
+          globalScene.time.delayedCall(500, () => audioManager.playBgm());
           globalScene.gameData.gameStats.dailyRunSessionsPlayed++;
-          globalScene.newArena(globalScene.gameMode.getStartingBiome());
+          const startingBiome = globalScene.gameMode.getStartingBiome();
+
+          await globalScene.loadBiomeAssets(startingBiome);
+          globalScene.newArena(startingBiome);
           globalScene.newBattle();
           globalScene.arena.init();
           globalScene.sessionPlayTime = 0;
@@ -306,18 +342,21 @@ export class TitlePhase extends Phase {
           });
       } else {
         // Grab first 10 chars of ISO date format (YYYY-MM-DD) and convert to base64
-        let seed: string = btoa(new Date().toISOString().substring(0, 10));
-        if (Overrides.DAILY_RUN_SEED_OVERRIDE != null) {
-          seed = Overrides.DAILY_RUN_SEED_OVERRIDE;
+        let seed: string = btoa(new Date().toISOString().slice(0, 10));
+        if (activeOverrides.DAILY_RUN_SEED_OVERRIDE != null) {
+          seed =
+            typeof activeOverrides.DAILY_RUN_SEED_OVERRIDE === "string"
+              ? activeOverrides.DAILY_RUN_SEED_OVERRIDE
+              : JSON.stringify(activeOverrides.DAILY_RUN_SEED_OVERRIDE);
         }
         generateDaily(seed);
       }
     });
   }
 
+  // TODO: Refactor this
   end(): void {
     if (!this.loaded && !globalScene.gameMode.isDaily) {
-      globalScene.arena.preloadBgm();
       globalScene.gameMode = getGameMode(this.gameMode);
       if (this.gameMode === GameModes.CHALLENGE) {
         globalScene.phaseManager.pushNew("SelectChallengePhase");
@@ -326,7 +365,7 @@ export class TitlePhase extends Phase {
       }
       globalScene.newArena(globalScene.gameMode.getStartingBiome());
     } else {
-      globalScene.playBgm();
+      audioManager.playBgm();
     }
 
     globalScene.phaseManager.pushNew("EncounterPhase", this.loaded);
@@ -353,8 +392,9 @@ export class TitlePhase extends Phase {
       }
     }
 
+    // TODO: Move this to a migrate script instead of running it on save slot load
     for (const achv of Object.keys(globalScene.gameData.achvUnlocks)) {
-      if (vouchers.hasOwnProperty(achv) && achv !== "CLASSIC_VICTORY") {
+      if (Object.hasOwn(vouchers, achv) && achv !== "CLASSIC_VICTORY") {
         globalScene.validateVoucher(vouchers[achv]);
       }
     }

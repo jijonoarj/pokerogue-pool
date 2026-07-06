@@ -1,5 +1,5 @@
 import { globalScene } from "#app/global-scene";
-import { pokemonPrevolutions } from "#balance/pokemon-evolutions";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { signatureSpecies } from "#balance/signature-species";
 import { EntryHazardTag } from "#data/arena-tag";
 import type { PokemonSpecies } from "#data/pokemon-species";
@@ -13,7 +13,6 @@ import { TrainerType } from "#enums/trainer-type";
 import { TrainerVariant } from "#enums/trainer-variant";
 import type { EnemyPokemon } from "#field/pokemon";
 import type { PersistentModifier } from "#modifiers/modifier";
-import { getIsInitialized, initI18n } from "#plugins/i18n";
 import type { TrainerConfig } from "#trainers/trainer-config";
 import { trainerConfigs } from "#trainers/trainer-config";
 import { TrainerPartyCompoundTemplate, type TrainerPartyTemplate } from "#trainers/trainer-party-template";
@@ -55,13 +54,13 @@ export class Trainer extends Phaser.GameObjects.Container {
     super(globalScene, -72, 80);
     this.config =
       trainerConfigOverride
-      ?? (trainerConfigs.hasOwnProperty(trainerType)
+      ?? (Object.hasOwn(trainerConfigs, trainerType)
         ? trainerConfigs[trainerType]
         : trainerConfigs[TrainerType.ACE_TRAINER]);
 
     this.variant = variant;
     this.partyTemplateIndex = Math.min(
-      partyTemplateIndex !== undefined ? partyTemplateIndex : randSeedItem(this.config.partyTemplates.map((_, i) => i)),
+      partyTemplateIndex === undefined ? randSeedItem(this.config.partyTemplates.map((_, i) => i)) : partyTemplateIndex,
       this.config.partyTemplates.length - 1,
     );
     // TODO: Rework this and add actual error handling for missing names
@@ -174,29 +173,24 @@ export class Trainer extends Phaser.GameObjects.Container {
     if (this.name) {
       // If the title should be included.
       if (includeTitle) {
-        // Check if the internationalization (i18n) system is initialized.
-        if (!getIsInitialized()) {
-          // Initialize the i18n system if it is not already initialized.
-          initI18n();
-        }
         // Get the localized trainer class name from the i18n file and set it as the title.
         // This is used for trainer class names, not titles like "Elite Four, Champion, etc."
         title = i18next.t(`trainerClasses:${toCamelCase(name)}`);
       }
 
       // If no specific trainer slot is set.
-      if (!trainerSlot) {
+      if (trainerSlot) {
+        // Assign the name based on the trainer slot:
+        // Use 'this.name' if 'trainerSlot' is TRAINER.
+        // Otherwise, use 'this.partnerName' if it exists, or 'this.name' if it doesn't.
+        name = trainerSlot === TrainerSlot.TRAINER ? this.name : this.partnerName || this.name;
+      } else {
         // Use the trainer's name.
         name = this.name;
         // If there is a partner name, concatenate it with the trainer's name using "&".
         if (this.partnerName) {
           name = `${name} & ${this.partnerName}`;
         }
-      } else {
-        // Assign the name based on the trainer slot:
-        // Use 'this.name' if 'trainerSlot' is TRAINER.
-        // Otherwise, use 'this.partnerName' if it exists, or 'this.name' if it doesn't.
-        name = trainerSlot === TrainerSlot.TRAINER ? this.name : this.partnerName || this.name;
       }
     }
 
@@ -231,32 +225,32 @@ export class Trainer extends Phaser.GameObjects.Container {
   }
 
   getEncounterBgm(): string {
-    return !this.variant
-      ? this.config.encounterBgm
-      : (this.variant === TrainerVariant.DOUBLE ? this.config.doubleEncounterBgm : this.config.femaleEncounterBgm)
-          || this.config.encounterBgm;
+    return this.variant
+      ? (this.variant === TrainerVariant.DOUBLE ? this.config.doubleEncounterBgm : this.config.femaleEncounterBgm)
+          || this.config.encounterBgm
+      : this.config.encounterBgm;
   }
 
   getEncounterMessages(): string[] {
-    return !this.variant
-      ? this.config.encounterMessages
-      : (this.variant === TrainerVariant.DOUBLE
+    return this.variant
+      ? (this.variant === TrainerVariant.DOUBLE
           ? this.config.doubleEncounterMessages
-          : this.config.femaleEncounterMessages) || this.config.encounterMessages;
+          : this.config.femaleEncounterMessages) || this.config.encounterMessages
+      : this.config.encounterMessages;
   }
 
   getVictoryMessages(): string[] {
-    return !this.variant
-      ? this.config.victoryMessages
-      : (this.variant === TrainerVariant.DOUBLE ? this.config.doubleVictoryMessages : this.config.femaleVictoryMessages)
-          || this.config.victoryMessages;
+    return this.variant
+      ? (this.variant === TrainerVariant.DOUBLE ? this.config.doubleVictoryMessages : this.config.femaleVictoryMessages)
+          || this.config.victoryMessages
+      : this.config.victoryMessages;
   }
 
   getDefeatMessages(): string[] {
-    return !this.variant
-      ? this.config.defeatMessages
-      : (this.variant === TrainerVariant.DOUBLE ? this.config.doubleDefeatMessages : this.config.femaleDefeatMessages)
-          || this.config.defeatMessages;
+    return this.variant
+      ? (this.variant === TrainerVariant.DOUBLE ? this.config.doubleDefeatMessages : this.config.femaleDefeatMessages)
+          || this.config.defeatMessages
+      : this.config.defeatMessages;
   }
 
   getPartyTemplate(): TrainerPartyTemplate {
@@ -327,11 +321,11 @@ export class Trainer extends Phaser.GameObjects.Container {
 
         // If the battle is not one of the named trainer doubles
         if (!(this.config.trainerTypeDouble && this.isDouble() && !this.config.doubleOnly)) {
-          if (this.config.partyMemberFuncs.hasOwnProperty(index)) {
+          if (Object.hasOwn(this.config.partyMemberFuncs, index)) {
             ret = this.config.partyMemberFuncs[index](level, strength);
             return;
           }
-          if (this.config.partyMemberFuncs.hasOwnProperty(index - template.size)) {
+          if (Object.hasOwn(this.config.partyMemberFuncs, index - template.size)) {
             ret = this.config.partyMemberFuncs[index - template.size](level, template.getStrength(index));
             return;
           }
@@ -443,7 +437,7 @@ export class Trainer extends Phaser.GameObjects.Container {
         ? this.config.getDerivedType() + ((index + 1) << 8)
         : globalScene.currentBattle.waveIndex
             + (this.config.getDerivedType() << 10)
-            + (((!this.config.useSameSeedForAllMembers ? index : 0) + 1) << 8),
+            + (((this.config.useSameSeedForAllMembers ? 0 : index) + 1) << 8),
     );
 
     return ret!; // TODO: is this bang correct?
@@ -468,7 +462,7 @@ export class Trainer extends Phaser.GameObjects.Container {
         tier = TrainerPoolTier.ULTRA_RARE;
       }
       console.log(TrainerPoolTier[tier]);
-      while (!this.config.speciesPools.hasOwnProperty(tier) || this.config.speciesPools[tier].length === 0) {
+      while (!Object.hasOwn(this.config.speciesPools, tier) || this.config.speciesPools[tier].length === 0) {
         console.log(
           `Downgraded trainer Pokemon rarity tier from ${TrainerPoolTier[tier]} to ${TrainerPoolTier[tier - 1]}`,
         );
@@ -491,10 +485,10 @@ export class Trainer extends Phaser.GameObjects.Container {
 
     console.log(ret.getName());
 
-    if (pokemonPrevolutions.hasOwnProperty(baseSpecies.speciesId) && ret.speciesId !== baseSpecies.speciesId) {
+    if (speciesDataRegistry.hasPrevolution(baseSpecies.speciesId) && ret.speciesId !== baseSpecies.speciesId) {
       retry = true;
     } else if (template.isBalanced(battle.enemyParty.length)) {
-      const partyMemberTypes = battle.enemyParty.flatMap(p => p.getTypes(true));
+      const partyMemberTypes = battle.enemyParty.flatMap(p => p.getTypes());
       if (
         partyMemberTypes.indexOf(ret.type1) > -1
         || (ret.type2 !== null && partyMemberTypes.indexOf(ret.type2) > -1)
@@ -542,8 +536,8 @@ export class Trainer extends Phaser.GameObjects.Container {
   checkDuplicateSpecies(baseSpecies: SpeciesId): boolean {
     const staticSpecies = (signatureSpecies[TrainerType[this.config.trainerType]] ?? []).flat(1).map(s => {
       let root = s;
-      while (pokemonPrevolutions.hasOwnProperty(root)) {
-        root = pokemonPrevolutions[root];
+      while (speciesDataRegistry.hasPrevolution(root)) {
+        root = speciesDataRegistry.getPrevolution(root)!;
       }
       return root;
     });
@@ -793,6 +787,7 @@ export class Trainer extends Phaser.GameObjects.Container {
       this.config.trainerAI.teraMode === TeraAIMode.INSTANT_TERA
       && !pokemon.isTerastallized
       && this.config.trainerAI.instantTeras.includes(pokemon.initialTeamIndex)
+      && !globalScene.currentBattle.enemyFaintsHistory.some(f => f.pokemon.id === pokemon.id)
     ) {
       return true;
     }

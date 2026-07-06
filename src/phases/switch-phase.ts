@@ -1,8 +1,9 @@
 import { globalScene } from "#app/global-scene";
+import { PartyUiMode } from "#enums/party-ui-mode";
 import { SwitchType } from "#enums/switch-type";
 import { UiMode } from "#enums/ui-mode";
 import { BattlePhase } from "#phases/battle-phase";
-import { PartyOption, PartyUiHandler, PartyUiMode } from "#ui/party-ui-handler";
+import { PartyOption, PartyUiHandler } from "#ui/party-ui-handler";
 
 /**
  * Opens the party selector UI and transitions into a {@linkcode SwitchSummonPhase}
@@ -22,7 +23,8 @@ export class SwitchPhase extends BattlePhase {
    * @param isModal Indicates if the switch should be forced (true) or is
    * optional (false).
    * @param doReturn Indicates if the party member on the field should be
-   * recalled to ball or has already left the field. Passed to {@linkcode SwitchSummonPhase}.
+   * recalled to ball or has already left the field. Passed to {@linkcode SwitchSummonPhase},
+   * and is (ostensibly) only set to `false` from `FaintPhase`.
    */
   constructor(switchType: SwitchType, fieldIndex: number, isModal: boolean, doReturn: boolean) {
     super();
@@ -36,11 +38,8 @@ export class SwitchPhase extends BattlePhase {
   start() {
     super.start();
 
-    // Skip modal switch if impossible (no remaining party members that aren't in battle)
-    if (
-      this.isModal
-      && globalScene.getPlayerParty().filter(p => p.isAllowedInBattle() && !p.isActive(true)).length === 0
-    ) {
+    // Skip modal switch if impossible (no remaining party members that aren't already in battle)
+    if (this.isModal && globalScene.getPokemonAllowedInBattle().every(p => p.isOnField())) {
       return super.end();
     }
 
@@ -51,16 +50,14 @@ export class SwitchPhase extends BattlePhase {
      * if the mon should have already been returned but is still alive and well
      * on the field. see also; battle.test.ts
      */
+    // TODO: If a Phasing move kills its own user, when does said user appear on field?
+    // Is it after the user faints
     if (this.isModal && !this.doReturn && !globalScene.getPlayerParty()[this.fieldIndex].isFainted()) {
       return super.end();
     }
 
     // Check if there is any space still in field
-    if (
-      this.isModal
-      && globalScene.getPlayerField().filter(p => p.isAllowedInBattle() && p.isActive(true)).length
-        >= globalScene.currentBattle.getBattlerCount()
-    ) {
+    if (this.isModal && globalScene.getPlayerField(true).length > globalScene.currentBattle.getBattlerCount()) {
       return super.end();
     }
 

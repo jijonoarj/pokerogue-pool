@@ -1,3 +1,4 @@
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import type { Button } from "#enums/buttons";
 import { Device } from "#enums/devices";
@@ -6,6 +7,7 @@ import { TextStyle } from "#enums/text-style";
 import { UiMode } from "#enums/ui-mode";
 import { AchvBar } from "#ui/achv-bar";
 import { AchvsUiHandler } from "#ui/achvs-ui-handler";
+import { AlertModalUiHandler } from "#ui/alert-modal-ui-handler";
 import { AutoCompleteUiHandler } from "#ui/autocomplete-ui-handler";
 import { AwaitableUiHandler } from "#ui/awaitable-ui-handler";
 import { BallUiHandler } from "#ui/ball-ui-handler";
@@ -26,6 +28,7 @@ import { GamepadBindingUiHandler } from "#ui/gamepad-binding-ui-handler";
 import { KeyboardBindingUiHandler } from "#ui/keyboard-binding-ui-handler";
 import { LoadingModalUiHandler } from "#ui/loading-modal-ui-handler";
 import { LoginFormUiHandler } from "#ui/login-form-ui-handler";
+import { LoginOrRegisterUiHandler } from "#ui/login-or-register-ui-handler";
 import { MenuUiHandler } from "#ui/menu-ui-handler";
 import { MessageUiHandler } from "#ui/message-ui-handler";
 import { ModifierSelectUiHandler } from "#ui/modifier-select-ui-handler";
@@ -42,7 +45,6 @@ import { RunHistoryUiHandler } from "#ui/run-history-ui-handler";
 import { RunInfoUiHandler } from "#ui/run-info-ui-handler";
 import { SaveSlotSelectUiHandler } from "#ui/save-slot-select-ui-handler";
 import { SavingIconContainer } from "#ui/saving-icon-handler";
-import { SessionReloadModalUiHandler } from "#ui/session-reload-modal-ui-handler";
 import { SettingsAudioUiHandler } from "#ui/settings-audio-ui-handler";
 import { SettingsDisplayUiHandler } from "#ui/settings-display-ui-handler";
 import { SettingsGamepadUiHandler } from "#ui/settings-gamepad-ui-handler";
@@ -96,7 +98,6 @@ const noTransitionModes = [
   UiMode.LOGIN_FORM,
   UiMode.REGISTRATION_FORM,
   UiMode.LOADING,
-  UiMode.SESSION_RELOAD,
   UiMode.UNAVAILABLE,
   UiMode.RENAME_POKEMON,
   UiMode.RENAME_RUN,
@@ -106,8 +107,10 @@ const noTransitionModes = [
   UiMode.MYSTERY_ENCOUNTER,
   UiMode.RUN_INFO,
   UiMode.CHANGE_PASSWORD_FORM,
+  UiMode.ALERT_MODAL,
 ];
 
+// biome-ignore lint/style/useNamingConvention: a unique case (only 2 letters)
 export class UI extends Phaser.GameObjects.Container {
   private mode: UiMode;
   private modeChain: UiMode[];
@@ -163,10 +166,10 @@ export class UI extends Phaser.GameObjects.Container {
       new PokedexUiHandler(),
       new PokedexScanUiHandler(UiMode.TEST_DIALOGUE),
       new PokedexPageUiHandler(),
+      new LoginOrRegisterUiHandler(),
       new LoginFormUiHandler(),
       new RegistrationFormUiHandler(),
       new LoadingModalUiHandler(),
-      new SessionReloadModalUiHandler(),
       new UnavailableModalUiHandler(),
       new GameChallengesUiHandler(),
       new RenameFormUiHandler(),
@@ -178,6 +181,7 @@ export class UI extends Phaser.GameObjects.Container {
       new AdminUiHandler(),
       new MysteryEncounterUiHandler(),
       new ChangePasswordFormUiHandler(),
+      new AlertModalUiHandler(),
     ];
   }
 
@@ -290,8 +294,7 @@ export class UI extends Phaser.GameObjects.Container {
     }
     if (prompt && text.indexOf("$") > -1) {
       const messagePages = text.split(/\$/g).map(m => m.trim());
-      // biome-ignore lint/complexity/useOptionalChain: optional chain would change this to be null instead of undefined.
-      let showMessageAndCallback = () => callback && callback();
+      let showMessageAndCallback = () => callback?.();
       for (let p = messagePages.length - 1; p >= 0; p--) {
         const originalFunc = showMessageAndCallback;
         messagePages[p] = messagePages[p].split(repname[0]).join(pokename[0]);
@@ -475,11 +478,11 @@ export class UI extends Phaser.GameObjects.Container {
   }
 
   playSelect(): void {
-    globalScene.playSound("ui/select");
+    audioManager.playSound("ui/select");
   }
 
   playError(): void {
-    globalScene.playSound("ui/error");
+    audioManager.playSound("ui/error");
   }
 
   fadeOut(duration: number): Promise<void> {
@@ -520,6 +523,7 @@ export class UI extends Phaser.GameObjects.Container {
   }
 
   private setModeInternal(
+    this: UI,
     mode: UiMode,
     clear: boolean,
     forceTransition: boolean,
@@ -647,7 +651,8 @@ export class UI extends Phaser.GameObjects.Container {
    */
   public getGamepadType(): string {
     if (globalScene.inputMethod === "gamepad") {
-      return globalScene.inputController.getConfig(globalScene.inputController.selectedDevice[Device.GAMEPAD]).padType;
+      // TODO: is this bang correct?
+      return globalScene.inputController.getConfig(globalScene.inputController.selectedDevice[Device.GAMEPAD]!).padType;
     }
     return globalScene.inputMethod;
   }

@@ -12,7 +12,7 @@
 
 import { globalScene } from "#app/global-scene";
 import type { Mutable } from "#types/type-helpers";
-import { randSeedItem } from "#utils/common";
+import { randSeedInt, randSeedItem, randSeedShuffle } from "#utils/common";
 
 /**
  * Select a random element using an offset such that the chosen element is
@@ -21,9 +21,10 @@ import { randSeedItem } from "#utils/common";
  * @remarks
  * If the seed offset is greater than the number of choices, this will just choose a random element
  *
- * @param arr - The array of items to choose from
+ * @param choices - The array of items to choose from
+ * @param seedOffset - The offset into the shuffled array
  * @param scene - (default {@linkcode globalScene}); The scene to use for random seeding
- * @returns A random item from the array that is guaranteed to be different from the
+ * @returns A random item from the array that is guaranteed to be different from the previous result
  * @typeParam T - The type of items in the array
  *
  * @example
@@ -38,8 +39,7 @@ import { randSeedItem } from "#utils/common";
  * ```
  */
 export function randSeedUniqueItem<T>(choices: readonly T[], seedOffset: number, scene = globalScene): T {
-  if (seedOffset === 0 || choices.length <= seedOffset) {
-    // cast to mutable is safe because randSeedItem does not actually modify the array
+  if (choices.length <= seedOffset) {
     return randSeedItem(choices as Mutable<typeof choices>);
   }
 
@@ -47,14 +47,31 @@ export function randSeedUniqueItem<T>(choices: readonly T[], seedOffset: number,
   let choice: T;
 
   scene.executeWithSeedOffset(() => {
-    const curChoices = choices.slice();
-    for (let i = 0; i < seedOffset; i++) {
-      const previousChoice = randSeedItem(curChoices);
-      curChoices.splice(curChoices.indexOf(previousChoice), 1);
-    }
-    choice = randSeedItem(curChoices);
-  }, seedOffset);
-
-  // Bang is safe since there are at least `seedOffset` choices, so the method above is guaranteed to set `choice`
+    choice = randSeedShuffle(choices.slice())[seedOffset];
+  }, 0);
   return choice!;
+}
+
+/**
+ * Function for picking an item out of a mapping based on the given weights
+ * @param items - The mapping of item to weight
+ * @returns a randomly picked item according to the weights
+ */
+export function weightedPick<T>(items: Map<T, number>): T {
+  const totalWeight = [...items.values()].reduce((a: number, b: number) => a + b, 0);
+  const randomNumber = randSeedInt(totalWeight);
+
+  let totalWeightSoFar = 0;
+  for (const [i, weight] of items) {
+    totalWeightSoFar += weight;
+
+    // This is a < and not a <= since the first item can have 0 weight
+    if (randomNumber < totalWeightSoFar) {
+      return i;
+    }
+  }
+
+  // Failsafe if the above loop somehow failed (e.g., if all items have 0 weight)
+  console.error("Random selection failed, selecting the first element instead. Original list of items:", items);
+  return items.keys()[0];
 }

@@ -1,18 +1,25 @@
 import { FixedBattleConfig } from "#app/battle";
 import { CHALLENGE_MODE_MYSTERY_ENCOUNTER_WAVES, CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { globalScene } from "#app/global-scene";
-import Overrides from "#app/overrides";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { activeOverrides } from "#app/overrides";
 import { allChallenges, type Challenge, copyChallenge } from "#data/challenge";
-import { getDailyEventSeedBoss, getDailyStartingBiome } from "#data/daily-run";
-import { allSpecies } from "#data/data-lists";
+import {
+  getDailyEventSeedBoss,
+  getDailyForcedWaveSpecies,
+  getDailyStartingBiome,
+  getDailyStartingMoney,
+  getDailyTrainerManipulation,
+} from "#data/daily-seed/daily-run";
+import { parseDailySeed } from "#data/daily-seed/daily-seed-utils";
 import type { PokemonSpecies } from "#data/pokemon-species";
 import { BiomeId } from "#enums/biome-id";
 import { ChallengeType } from "#enums/challenge-type";
 import { Challenges } from "#enums/challenges";
 import { GameModes } from "#enums/game-modes";
 import { SpeciesId } from "#enums/species-id";
-import type { Arena } from "#field/arena";
 import { classicFixedBattles, type FixedBattleConfigs } from "#trainers/fixed-battle-configs";
+import type { CustomDailyRunConfig } from "#types/daily-run";
 import { applyChallenges } from "#utils/challenge-utils";
 import { BooleanHolder, randSeedInt, randSeedItem } from "#utils/common";
 import { getPokemonSpecies } from "#utils/pokemon-utils";
@@ -37,6 +44,7 @@ export class GameMode implements GameModeConfig {
   public isClassic: boolean;
   public isEndless: boolean;
   public isDaily: boolean;
+  public dailyConfig?: CustomDailyRunConfig | undefined;
   public hasTrainers: boolean;
   public hasNoShop: boolean;
   public hasShortBiomes: boolean;
@@ -62,15 +70,24 @@ export class GameMode implements GameModeConfig {
 
   /**
    * Enables challenges if they are disabled and sets the specified challenge's value
-   * @param challenge The challenge to set
-   * @param value The value to give the challenge. Impact depends on the specific challenge
+   * @param challenge - The challenge to set
+   * @param value - The value to give the challenge. Impact depends on the specific challenge
+   * @param severity - If provided, will override the given severity amount. Unused if `challenge` does not use severity
+   * @todo Add severity support to daily mode challenge setting
    */
-  setChallengeValue(challenge: Challenges, value: number) {
+  setChallengeValue(challenge: Challenges, value: number, severity?: number) {
     if (!this.isChallenge) {
       this.isChallenge = true;
       this.challenges = allChallenges.map(c => copyChallenge(c));
     }
-    this.challenges.filter((chal: Challenge) => chal.id === challenge).map((chal: Challenge) => (chal.value = value));
+    this.challenges
+      .filter((chal: Challenge) => chal.id === challenge)
+      .forEach(chal => {
+        chal.value = value;
+        if (chal.hasSeverity()) {
+          chal.severity = severity ?? chal.severity;
+        }
+      });
   }
 
   /**
@@ -119,8 +136,8 @@ export class GameMode implements GameModeConfig {
    * - 5 for all other modes
    */
   getStartingLevel(): number {
-    if (Overrides.STARTING_LEVEL_OVERRIDE > 0) {
-      return Overrides.STARTING_LEVEL_OVERRIDE;
+    if (activeOverrides.STARTING_LEVEL_OVERRIDE > 0) {
+      return activeOverrides.STARTING_LEVEL_OVERRIDE;
     }
     switch (this.modeId) {
       case GameModes.DAILY:
@@ -134,9 +151,24 @@ export class GameMode implements GameModeConfig {
    * @returns either:
    * - override from overrides.ts
    * - 1000
+   * - override from a custom daily seed
    */
   getStartingMoney(): number {
-    return Overrides.STARTING_MONEY_OVERRIDE || 1000;
+    if (activeOverrides.STARTING_MONEY_OVERRIDE > 0) {
+      return activeOverrides.STARTING_MONEY_OVERRIDE;
+    }
+
+    switch (this.modeId) {
+      // biome-ignore lint/suspicious/noFallthroughSwitchClause: Intentional
+      case GameModes.DAILY: {
+        const dailyStartingMoney = getDailyStartingMoney();
+        if (dailyStartingMoney != null) {
+          return dailyStartingMoney;
+        }
+      }
+      default:
+        return 1000;
+    }
   }
 
   /**
@@ -146,8 +178,8 @@ export class GameMode implements GameModeConfig {
    * - Town
    */
   getStartingBiome(): BiomeId {
-    if (Overrides.STARTING_BIOME_OVERRIDE != null) {
-      return Overrides.STARTING_BIOME_OVERRIDE;
+    if (activeOverrides.STARTING_BIOME_OVERRIDE != null) {
+      return activeOverrides.STARTING_BIOME_OVERRIDE;
     }
 
     switch (this.modeId) {
@@ -161,7 +193,7 @@ export class GameMode implements GameModeConfig {
   getWaveForDifficulty(waveIndex: number, ignoreCurveChanges = false): number {
     switch (this.modeId) {
       case GameModes.DAILY:
-        return waveIndex + 30 + (!ignoreCurveChanges ? Math.floor(waveIndex / 5) : 0);
+        return waveIndex + 30 + (ignoreCurveChanges ? 0 : Math.floor(waveIndex / 5));
       default:
         return waveIndex;
     }
@@ -169,18 +201,21 @@ export class GameMode implements GameModeConfig {
 
   /**
    * Determines whether or not to generate a trainer
-   * @param waveIndex the current floor the player is on (trainer sprites fail to generate on X1 floors)
-   * @param arena the current {@linkcode Arena}
-   * @returns `true` if a trainer should be generated, `false` otherwise
+   * @param waveIndex - The current floor the player is on (trainer sprites fail to generate on X1 floors)
+   * @returns Whether a trainer should be generated
    */
-  isWaveTrainer(waveIndex: number, arena: Arena): boolean {
-    /**
-     * Daily spawns trainers on floors 5, 15, 20, 25, 30, 35, 40, and 45
-     */
+  public isWaveTrainer(waveIndex: number): boolean {
+    const { arena, offsetGym } = globalScene;
+
+    // Daily spawns trainers on floors 5, 15, 20, 25, 30, 35, 40, and 45
     if (this.isDaily) {
+      const trainerManipulation = getDailyTrainerManipulation(waveIndex);
+      if (trainerManipulation != null) {
+        return trainerManipulation;
+      }
       return waveIndex % 10 === 5 || (!(waveIndex % 10) && waveIndex > 10 && !this.isWaveFinal(waveIndex));
     }
-    if (waveIndex % 30 === (globalScene.offsetGym ? 0 : 20) && !this.isWaveFinal(waveIndex)) {
+    if (waveIndex % 30 === (offsetGym ? 0 : 20) && !this.isWaveFinal(waveIndex)) {
       return true;
     }
     if (waveIndex % 10 !== 1 && waveIndex % 10) {
@@ -188,22 +223,22 @@ export class GameMode implements GameModeConfig {
        * Do not check X1 floors since there's a bug that stops trainer sprites from appearing
        * after a X0 full party heal, this also allows for a smoother biome transition for general gameplay feel
        */
-      const trainerChance = arena.getTrainerChance();
+      const trainerChance = arena.trainerChance;
       let allowTrainerBattle = true;
       if (trainerChance) {
         const waveBase = Math.floor(waveIndex / 10) * 10;
         // Stop generic trainers from spawning in within 2 waves of a fixed trainer battle
-        for (let w = Math.max(waveIndex - 2, waveBase + 2); w <= Math.min(waveIndex + 2, waveBase + 9); w++) {
+        for (let w = Math.max(waveIndex - 2, waveBase + 2); w <= Math.min(waveIndex + 2, waveBase + 10); w++) {
           if (w === waveIndex) {
             continue;
           }
-          if (w % 30 === (globalScene.offsetGym ? 0 : 20) || this.isFixedBattle(w)) {
+          if (w % 30 === (offsetGym ? 0 : 20) || this.isFixedBattle(w)) {
             allowTrainerBattle = false;
             break;
           }
           if (w < waveIndex) {
             globalScene.executeWithSeedOffset(() => {
-              const waveTrainerChance = arena.getTrainerChance();
+              const waveTrainerChance = arena.trainerChance;
               if (!randSeedInt(waveTrainerChance)) {
                 allowTrainerBattle = false;
               }
@@ -233,23 +268,24 @@ export class GameMode implements GameModeConfig {
 
   getOverrideSpecies(waveIndex: number): PokemonSpecies | null {
     if (this.isDaily && this.isWaveFinal(waveIndex)) {
-      const eventBoss = getDailyEventSeedBoss(globalScene.seed);
-      if (eventBoss != null) {
+      const eventBoss = getDailyEventSeedBoss();
+      if (eventBoss?.speciesId != null) {
         // Cannot set form index here, it will be overriden when adding it as enemy pokemon.
         return getPokemonSpecies(eventBoss.speciesId);
       }
 
-      const allFinalBossSpecies = allSpecies.filter(
-        s =>
+      const allFinalBossSpecies = speciesDataRegistry.getAllSpecies().filter(s => {
+        return (
           (s.subLegendary || s.legendary || s.mythical)
           && s.baseTotal >= 600
           && s.speciesId !== SpeciesId.ETERNATUS
-          && s.speciesId !== SpeciesId.ARCEUS,
-      );
+          && s.speciesId !== SpeciesId.ARCEUS
+        );
+      });
       return randSeedItem(allFinalBossSpecies);
     }
 
-    return null;
+    return getDailyForcedWaveSpecies(waveIndex);
   }
 
   /**
@@ -265,7 +301,7 @@ export class GameMode implements GameModeConfig {
         return waveIndex === 200;
       case GameModes.ENDLESS:
       case GameModes.SPLICED_ENDLESS:
-        return !(waveIndex % 250);
+        return waveIndex % 250 === 0;
       case GameModes.DAILY:
         return waveIndex === 50;
     }
@@ -287,20 +323,21 @@ export class GameMode implements GameModeConfig {
   }
 
   /**
-   * Every 50 waves of an Endless mode is a boss
-   * At this time it is paradox pokemon
-   * @returns true if waveIndex is a multiple of 50 in Endless
+   * Check whether the current wave is an Endless boss of any kind.
+   * @param waveIndex - The current wave number.
+   * @returns Whether `waveIndex` corresponds to an Endless boss.
    */
   isEndlessBoss(waveIndex: number): boolean {
     return waveIndex % 50 === 0 && (this.modeId === GameModes.ENDLESS || this.modeId === GameModes.SPLICED_ENDLESS);
   }
 
   /**
-   * Every 250 waves of an Endless mode is a minor boss
-   * At this time it is Eternatus
-   * @returns true if waveIndex is a multiple of 250 in Endless
+   * Check whether the current wave is an Endless minor boss.
+   * Currently is normal Eternatus.
+   * @param waveIndex - The current wave number.
+   * @returns Whether `waveIndex` is a multiple of 250 during endless mode.
    */
-  isEndlessMinorBoss(waveIndex: number): boolean {
+  public isEndlessMinorBoss(waveIndex: number): boolean {
     return waveIndex % 250 === 0 && (this.modeId === GameModes.ENDLESS || this.modeId === GameModes.SPLICED_ENDLESS);
   }
 
@@ -321,7 +358,7 @@ export class GameMode implements GameModeConfig {
   isFixedBattle(waveIndex: number): boolean {
     const dummyConfig = new FixedBattleConfig();
     return (
-      this.battleConfig.hasOwnProperty(waveIndex)
+      Object.hasOwn(this.battleConfig, waveIndex)
       || applyChallenges(ChallengeType.FIXED_BATTLES, waveIndex, dummyConfig)
     );
   }
@@ -331,7 +368,7 @@ export class GameMode implements GameModeConfig {
    * @param waveIndex The wave to check.
    * @returns The fixed battle for this wave.
    */
-  getFixedBattle(waveIndex: number): FixedBattleConfig {
+  getFixedBattle(waveIndex: number): FixedBattleConfig | undefined {
     const challengeConfig = new FixedBattleConfig();
     if (applyChallenges(ChallengeType.FIXED_BATTLES, waveIndex, challengeConfig)) {
       return challengeConfig;
@@ -366,10 +403,10 @@ export class GameMode implements GameModeConfig {
       case GameModes.CLASSIC:
       case GameModes.CHALLENGE:
       case GameModes.DAILY:
-        return !isBoss ? 18 : 6;
+        return isBoss ? 6 : 18;
       case GameModes.ENDLESS:
       case GameModes.SPLICED_ENDLESS:
-        return !isBoss ? 12 : 4;
+        return isBoss ? 4 : 12;
     }
   }
 
@@ -391,7 +428,7 @@ export class GameMode implements GameModeConfig {
   /**
    * Returns the wave range where MEs can spawn for the game mode [min, max]
    */
-  getMysteryEncounterLegalWaves(): [number, number] {
+  getMysteryEncounterLegalWaves(): [minWave: number, maxWave: number] {
     switch (this.modeId) {
       case GameModes.CLASSIC:
         return CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES;
@@ -400,6 +437,18 @@ export class GameMode implements GameModeConfig {
       default:
         return [0, 0];
     }
+  }
+
+  /**
+   * Sets the daily config if the seed is a custom seed.
+   * @param seed - The seed to check
+   * @returns The seed to use.
+   * @remarks
+   * If it is not a custom seed, it will return the original seed.
+   */
+  public trySetCustomDailyConfig(seed: string): string {
+    this.dailyConfig = parseDailySeed(seed);
+    return this.dailyConfig?.seed ?? seed;
   }
 
   static getModeName(modeId: GameModes): string {

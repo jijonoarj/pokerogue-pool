@@ -1,5 +1,6 @@
-import { pokerogueApi } from "#api/pokerogue-api";
+import { pokerogueApi } from "#api/api";
 import { loggedInUser, updateUserInfo } from "#app/account";
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import { handleTutorial, Tutorial } from "#app/tutorial";
 import { bypassLogin, isApp, isBeta, isDev } from "#constants/app-constants";
@@ -8,8 +9,8 @@ import { Button } from "#enums/buttons";
 import { GameDataType } from "#enums/game-data-type";
 import { TextStyle } from "#enums/text-style";
 import { UiMode } from "#enums/ui-mode";
-import type { OptionSelectConfig, OptionSelectItem } from "#ui/abstract-option-select-ui-handler";
 import type { AwaitableUiHandler } from "#ui/awaitable-ui-handler";
+import type { OptionSelectConfig, OptionSelectItem } from "#ui/base-option-select-ui-handler";
 import { BgmBar } from "#ui/bgm-bar";
 import { MessageUiHandler } from "#ui/message-ui-handler";
 import { addTextObject, getTextStyleOptions } from "#ui/text";
@@ -86,7 +87,7 @@ export class MenuUiHandler extends MessageUiHandler {
   setup(): void {
     const ui = this.getUi();
     // wiki url directs based on languges available on wiki
-    const lang = i18next.resolvedLanguage?.substring(0, 2)!; // TODO: is this bang correct?
+    const lang = i18next.resolvedLanguage?.slice(0, 2)!; // TODO: is this bang correct?
     if (["de", "fr", "ko", "zh"].includes(lang)) {
       wikiUrl = `https://wiki.pokerogue.net/${lang}:start`;
     }
@@ -129,6 +130,7 @@ export class MenuUiHandler extends MessageUiHandler {
         options: [MenuOptions.EGG_GACHA],
       },
       { condition: bypassLogin, options: [MenuOptions.LOG_OUT] },
+      { condition: !globalScene.currentBattle, options: [MenuOptions.SAVE_AND_QUIT] },
     ];
 
     this.menuOptions = getEnumValues(MenuOptions).filter(m => {
@@ -278,6 +280,7 @@ export class MenuUiHandler extends MessageUiHandler {
     manageDataOptions.push({
       label: i18next.t("menuUiHandler:importRunHistory"),
       handler: () => {
+        ui.revertMode();
         globalScene.gameData.importData(GameDataType.RUN_HISTORY);
         return true;
       },
@@ -318,21 +321,6 @@ export class MenuUiHandler extends MessageUiHandler {
           ui.setOverlayMode(UiMode.CHANGE_PASSWORD_FORM, {
             buttonActions: [() => ui.revertMode(), () => ui.revertMode()],
           });
-          return true;
-        },
-        keepOpen: true,
-      },
-      {
-        label: i18next.t("menuUiHandler:consentPreferences"),
-        handler: () => {
-          const consentLink = document.querySelector(".termly-display-preferences") as HTMLInputElement;
-          const clickEvent = new MouseEvent("click", {
-            view: window,
-            bubbles: true,
-            cancelable: true,
-          });
-          consentLink.dispatchEvent(clickEvent);
-          consentLink.focus();
           return true;
         },
         keepOpen: true,
@@ -530,12 +518,12 @@ export class MenuUiHandler extends MessageUiHandler {
 
     this.getUi().hideTooltip();
 
-    globalScene.playSound("ui/menu_open");
+    audioManager.playSound("ui/menu_open");
 
     // Make sure the tutorial overlay sits above everything, but below the message box
     this.menuContainer.bringToTop(this.tutorialOverlay);
     this.menuContainer.bringToTop(this.menuMessageBoxContainer);
-    handleTutorial(Tutorial.Menu);
+    handleTutorial(Tutorial.MENU);
 
     this.bgmBar.toggleBgmBar(true);
 
@@ -656,42 +644,39 @@ export class MenuUiHandler extends MessageUiHandler {
           ui.setOverlayMode(UiMode.MENU_OPTION_SELECT, this.communityConfig);
           success = true;
           break;
-        case MenuOptions.SAVE_AND_QUIT:
-          if (globalScene.currentBattle) {
-            success = true;
-            const doSaveQuit = () => {
-              ui.setMode(UiMode.LOADING, {
-                buttonActions: [],
-                fadeOut: () =>
-                  globalScene.gameData.saveAll(true, true, true, true).then(() => {
-                    globalScene.reset(true);
-                  }),
-              });
-            };
-            if (globalScene.currentBattle.turn > 1) {
-              ui.showText(i18next.t("menuUiHandler:losingProgressionWarning"), null, () => {
-                if (!this.active) {
+        case MenuOptions.SAVE_AND_QUIT: {
+          success = true;
+          const doSaveQuit = () => {
+            ui.setMode(UiMode.LOADING, {
+              buttonActions: [],
+              fadeOut: () =>
+                globalScene.gameData.saveAll(true, true, true, true).then(() => {
+                  globalScene.reset(true);
+                }),
+            });
+          };
+          if (globalScene.currentBattle.turn > 1) {
+            ui.showText(i18next.t("menuUiHandler:losingProgressionWarning"), null, () => {
+              if (!this.active) {
+                this.showText("", 0);
+                return;
+              }
+              ui.setOverlayMode(
+                UiMode.CONFIRM,
+                doSaveQuit,
+                () => {
+                  ui.revertMode();
                   this.showText("", 0);
-                  return;
-                }
-                ui.setOverlayMode(
-                  UiMode.CONFIRM,
-                  doSaveQuit,
-                  () => {
-                    ui.revertMode();
-                    this.showText("", 0);
-                  },
-                  false,
-                  -98,
-                );
-              });
-            } else {
-              doSaveQuit();
-            }
+                },
+                false,
+                -98,
+              );
+            });
           } else {
-            error = true;
+            doSaveQuit();
           }
           break;
+        }
         case MenuOptions.LOG_OUT: {
           success = true;
           const doLogout = () => {

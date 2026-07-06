@@ -18,7 +18,7 @@ import {
 import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
-import type { OptionSelectItem } from "#ui/abstract-option-select-ui-handler";
+import type { OptionSelectItem } from "#ui/base-option-select-ui-handler";
 import i18next from "i18next";
 
 /** i18n namespace for the encounter */
@@ -216,7 +216,21 @@ function pokemonAndMoveChosen(pokemon: PlayerPokemon, move: PokemonMove, correct
   const correctMove = move.getMove().category === correctMoveCategory;
   encounter.setDialogueToken("pokeName", pokemon.getNameToRender());
   encounter.setDialogueToken("move", move.getName());
-  if (!correctMove) {
+  if (correctMove) {
+    encounter.selectedOption!.dialogue!.selected = [
+      {
+        text: `${namespace}:option.selected`,
+      },
+      {
+        text: `${namespace}:correct`,
+        speaker: `${namespace}:speaker`,
+      },
+      {
+        text: `${namespace}:correctExp`,
+      },
+    ];
+    setEncounterExp([pokemon.id], 100);
+  } else {
     encounter.selectedOption!.dialogue!.selected = [
       {
         text: `${namespace}:option.selected`,
@@ -233,20 +247,6 @@ function pokemonAndMoveChosen(pokemon: PlayerPokemon, move: PokemonMove, correct
       globalScene.getPlayerParty().map(p => p.id),
       50,
     );
-  } else {
-    encounter.selectedOption!.dialogue!.selected = [
-      {
-        text: `${namespace}:option.selected`,
-      },
-      {
-        text: `${namespace}:correct`,
-        speaker: `${namespace}:speaker`,
-      },
-      {
-        text: `${namespace}:correctExp`,
-      },
-    ];
-    setEncounterExp([pokemon.id], 100);
   }
   encounter.misc = {
     correctMove,

@@ -7,10 +7,14 @@ import { PokemonPhase } from "#phases/pokemon-phase";
 
 export class MoveEndPhase extends PokemonPhase {
   public readonly phaseName = "MoveEndPhase";
-  private wasFollowUp: boolean;
+  /**
+   * Whether the current move was a follow-up attack or not.
+   * Used to prevent ticking down Encore and similar effects when copying moves.
+   */
+  private readonly wasFollowUp: boolean;
 
   /** Targets from the preceding MovePhase */
-  private targets: Pokemon[];
+  private readonly targets: Pokemon[];
   constructor(battlerIndex: BattlerIndex, targets: Pokemon[], wasFollowUp = false) {
     super(battlerIndex);
 
@@ -22,6 +26,14 @@ export class MoveEndPhase extends PokemonPhase {
     super.start();
 
     const pokemon = this.getPokemon();
+
+    // Reset hit-related temporary data.
+    // TODO: These properties should be stored inside a "move in flight" object,
+    // which this Phase would promptly destroy
+    if (pokemon) {
+      pokemon.turnData.hitsLeft = -1;
+    }
+
     if (!this.wasFollowUp && pokemon?.isActive(true)) {
       pokemon.lapseTags(BattlerTagLapseType.AFTER_MOVE);
     }
@@ -34,6 +46,7 @@ export class MoveEndPhase extends PokemonPhase {
       }
     }
 
+    // TODO: Unshift a phase to trigger dancer for all active pokemon if at least 1 has the ability.
     this.end();
   }
 }

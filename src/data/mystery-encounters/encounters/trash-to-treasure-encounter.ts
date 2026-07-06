@@ -1,4 +1,5 @@
 import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import { modifierTypes } from "#data/data-lists";
 import { BattlerIndex } from "#enums/battler-index";
@@ -26,9 +27,9 @@ import {
 import { applyModifierTypeToPlayerPokemon } from "#mystery-encounters/encounter-pokemon-utils";
 import { type MysteryEncounter, MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
-import i18next from "#plugins/i18n";
 import { randSeedInt } from "#utils/common";
 import { getPokemonSpecies } from "#utils/pokemon-utils";
+import i18next from "i18next";
 
 /** the i18n namespace for this encounter */
 const namespace = "mysteryEncounters/trashToTreasure";
@@ -48,7 +49,7 @@ export const TrashToTreasureEncounter: MysteryEncounter = MysteryEncounterBuilde
 )
   .withEncounterTier(MysteryEncounterTier.ULTRA)
   .withSceneWaveRangeRequirement(100, CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES[1])
-  .withScenePartySizeRequirement(3, 6)
+  .withScenePartySizeRequirement(3)
   .withMaxAllowedEncounters(1)
   .withFleeAllowed(false)
   .withIntroSpriteConfigs([
@@ -131,8 +132,9 @@ export const TrashToTreasureEncounter: MysteryEncounter = MysteryEncounterBuilde
     // Load animations/sfx for Garbodor fight start moves
     loadCustomMovesForEncounter([MoveId.TOXIC, MoveId.STOCKPILE]);
 
-    globalScene.loadSe("PRSFX- Dig2", "battle_anims", "PRSFX- Dig2.wav");
-    globalScene.loadSe("PRSFX- Venom Drench", "battle_anims", "PRSFX- Venom Drench.wav");
+    globalScene
+      .loadSe("PRSFX- Dig2", "battle_anims", "PRSFX- Dig2.wav")
+      .loadSe("PRSFX- Venom Drench", "battle_anims", "PRSFX- Venom Drench.wav");
 
     encounter.setDialogueToken("costMultiplier", SHOP_ITEM_COST_MULTIPLIER.toString());
 
@@ -206,7 +208,7 @@ export const TrashToTreasureEncounter: MysteryEncounter = MysteryEncounterBuilde
         const modifier = blackSludge?.newModifier();
         if (modifier) {
           await globalScene.addModifier(modifier, false, false, false, true);
-          globalScene.playSound("battle_anims/PRSFX- Venom Drench", {
+          audioManager.playSound("battle_anims/PRSFX- Venom Drench", {
             volume: 2,
           });
           await showEncounterText(
@@ -246,7 +248,7 @@ async function tryApplyDigRewardItems() {
     }
   }
 
-  globalScene.playSound("item_fanfare");
+  audioManager.playSound("se/item_fanfare");
   await showEncounterText(
     i18next.t("battle:rewardGainCount", {
       modifierName: leftovers.name,
@@ -271,7 +273,7 @@ async function tryApplyDigRewardItems() {
     }
   }
 
-  globalScene.playSound("item_fanfare");
+  audioManager.playSound("se/item_fanfare");
   await showEncounterText(
     i18next.t("battle:rewardGainCount", {
       modifierName: shellBell.name,
@@ -284,12 +286,12 @@ async function tryApplyDigRewardItems() {
 }
 
 function doGarbageDig() {
-  globalScene.playSound("battle_anims/PRSFX- Dig2");
+  audioManager.playSound("battle_anims/PRSFX- Dig2");
   globalScene.time.delayedCall(SOUND_EFFECT_WAIT_TIME, () => {
-    globalScene.playSound("battle_anims/PRSFX- Dig2");
-    globalScene.playSound("battle_anims/PRSFX- Venom Drench", { volume: 2 });
+    audioManager.playSound("battle_anims/PRSFX- Dig2");
+    audioManager.playSound("battle_anims/PRSFX- Venom Drench", { volume: 2 });
   });
   globalScene.time.delayedCall(SOUND_EFFECT_WAIT_TIME * 2, () => {
-    globalScene.playSound("battle_anims/PRSFX- Dig2");
+    audioManager.playSound("battle_anims/PRSFX- Dig2");
   });
 }

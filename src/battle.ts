@@ -1,11 +1,13 @@
+import { DAILY_BOSS_LEVEL } from "#app/constants";
 import type { GameMode } from "#app/game-mode";
 import { globalScene } from "#app/global-scene";
+import { isDailyFinalBoss } from "#data/daily-seed/daily-seed-utils";
 import { ArenaTagType } from "#enums/arena-tag-type";
-import { BattleSpec } from "#enums/battle-spec";
 import { BattleType } from "#enums/battle-type";
 import { BattlerIndex } from "#enums/battler-index";
+import { BiomeId } from "#enums/biome-id";
 import type { Command } from "#enums/command";
-import type { MoveId } from "#enums/move-id";
+import { MoveId } from "#enums/move-id";
 import { MysteryEncounterMode } from "#enums/mystery-encounter-mode";
 import type { MysteryEncounterType } from "#enums/mystery-encounter-type";
 import type { PokeballType } from "#enums/pokeball";
@@ -18,11 +20,12 @@ import { Trainer } from "#field/trainer";
 import { MoneyMultiplierModifier, type PokemonHeldItemModifier } from "#modifiers/modifier";
 import type { CustomModifierSettings } from "#modifiers/modifier-type";
 import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
-import i18next from "#plugins/i18n";
 import { MusicPreference } from "#system/settings";
 import { trainerConfigs } from "#trainers/trainer-config";
+import type { NewBattleResolvedProps } from "#types/new-battle-props";
 import type { TurnMove } from "#types/turn-move";
 import {
+  isBetween,
   NumberHolder,
   randInt,
   randomString,
@@ -33,10 +36,11 @@ import {
 } from "#utils/common";
 import { getEnumValues } from "#utils/enums";
 import { randSeedUniqueItem } from "#utils/random";
+import i18next from "i18next";
 
 export interface TurnCommand {
   command: Command;
-  cursor?: number;
+  cursor?: number | undefined;
   move?: TurnMove;
   targets?: BattlerIndex[];
   skip?: boolean;
@@ -56,7 +60,6 @@ export class Battle {
   protected gameMode: GameMode;
   public waveIndex: number;
   public battleType: BattleType;
-  public battleSpec: BattleSpec;
   public trainer: Trainer | null;
   public enemyLevels: number[] | undefined;
   public enemyParty: EnemyPokemon[] = [];
@@ -71,10 +74,15 @@ export class Battle {
   public battleScore = 0;
   public postBattleLoot: PokemonHeldItemModifier[] = [];
   public escapeAttempts = 0;
-  public lastMove: MoveId;
+  /**
+   * A tracker of the last {@linkcode MoveId} successfully used this battle.
+   */
+  public lastMove: MoveId = MoveId.NONE;
   public battleSeed: string = randomString(16, true);
   private battleSeedState: string | null = null;
   public moneyScattered = 0;
+  // TODO: These trackers are only used for Sticky Web + Mirror Armor edge cases
+  // and are abhorrently janky.
   /** Primarily for double battles, keeps track of last enemy and player pokemon that triggered its ability or used a move */
   public lastEnemyInvolved: number;
   public lastPlayerInvolved: number;
@@ -88,9 +96,9 @@ export class Battle {
   public playerFaintsHistory: FaintLogEntry[] = [];
   public enemyFaintsHistory: FaintLogEntry[] = [];
 
-  public mysteryEncounterType?: MysteryEncounterType;
+  public mysteryEncounterType?: MysteryEncounterType | undefined;
   /** If the current battle is a Mystery Encounter, this will always be defined */
-  public mysteryEncounter?: MysteryEncounter;
+  public mysteryEncounter?: MysteryEncounter | undefined;
 
   /**
    * Tracker for whether the last run attempt failed.
@@ -98,37 +106,39 @@ export class Battle {
    */
   public failedRunAway = false;
 
-  private rngCounter = 0;
-
-  constructor(gameMode: GameMode, waveIndex: number, battleType: BattleType, trainer?: Trainer, double = false) {
+  constructor(
+    gameMode: GameMode,
+    { waveIndex, battleType, trainer, mysteryEncounterType, double = false }: NewBattleResolvedProps,
+  ) {
     this.gameMode = gameMode;
     this.waveIndex = waveIndex;
     this.battleType = battleType;
     this.trainer = trainer ?? null;
-    this.initBattleSpec();
-    this.enemyLevels =
-      battleType !== BattleType.TRAINER
-        ? new Array(double ? 2 : 1).fill(null).map(() => this.getLevelForWave())
-        : trainer?.getPartyLevels(this.waveIndex);
+    this.mysteryEncounterType = mysteryEncounterType;
     this.double = double;
+
+    this.enemyLevels =
+      battleType === BattleType.TRAINER
+        ? trainer?.getPartyLevels(this.waveIndex)
+        : // TODO: Remove array.fill.map
+          new Array(double ? 2 : 1).fill(null).map(() => this.getLevelForWave());
   }
 
-  private initBattleSpec(): void {
-    let spec = BattleSpec.DEFAULT;
-    if (this.gameMode.isWaveFinal(this.waveIndex) && this.gameMode.isClassic) {
-      spec = BattleSpec.FINAL_BOSS;
-    }
-    this.battleSpec = spec;
+  public get isClassicFinalBoss(): boolean {
+    return this.gameMode.isClassic && this.gameMode.isWaveFinal(this.waveIndex);
   }
 
   public getLevelForWave(): number {
+    if (isDailyFinalBoss(this.waveIndex)) {
+      return DAILY_BOSS_LEVEL;
+    }
     const levelWaveIndex = this.gameMode.getWaveForDifficulty(this.waveIndex);
     const baseLevel = 1 + levelWaveIndex / 2 + Math.pow(levelWaveIndex / 25, 2);
     const bossMultiplier = 1.2;
 
     if (this.gameMode.isBoss(this.waveIndex)) {
       const ret = Math.floor(baseLevel * bossMultiplier);
-      if (this.battleSpec === BattleSpec.FINAL_BOSS || !(this.waveIndex % 250)) {
+      if (this.isClassicFinalBoss || !(this.waveIndex % 250)) {
         return Math.ceil(ret / 25) * 25;
       }
       let levelOffset = 0;
@@ -249,20 +259,36 @@ export class Battle {
       }
       return this.trainer?.getMixedBattleBgm() ?? null;
     }
-    if (this.gameMode.isClassic && this.waveIndex > 195 && this.battleSpec !== BattleSpec.FINAL_BOSS) {
-      return "end_summit";
+    if (this.gameMode.isClassic) {
+      if (isBetween(this.waveIndex, 191, 194)) {
+        return "end";
+      }
+      if (isBetween(this.waveIndex, 196, 199)) {
+        return "end_summit";
+      }
     }
     const wildOpponents = globalScene.getEnemyParty();
     for (const pokemon of wildOpponents) {
-      if (this.battleSpec === BattleSpec.FINAL_BOSS) {
+      if (this.isClassicFinalBoss) {
         if (pokemon.species.getFormSpriteKey(pokemon.formIndex) === SpeciesFormKey.ETERNAMAX) {
           return "battle_final";
         }
         return "battle_final_encounter";
       }
-      if (pokemon.species.legendary || pokemon.species.subLegendary || pokemon.species.mythical) {
+      if (
+        pokemon.species.legendary
+        || pokemon.species.subLegendary
+        || pokemon.species.mythical
+        || (pokemon.species.category.startsWith("Paradox") && globalScene.arena.biomeId !== BiomeId.END)
+      ) {
         if (globalScene.musicPreference === MusicPreference.GENFIVE) {
           switch (pokemon.species.speciesId) {
+            case SpeciesId.ARTICUNO:
+            case SpeciesId.ZAPDOS:
+            case SpeciesId.MOLTRES:
+            case SpeciesId.MEWTWO:
+            case SpeciesId.MEW:
+              return "battle_legendary_mew";
             case SpeciesId.REGIROCK:
             case SpeciesId.REGICE:
             case SpeciesId.REGISTEEL:
@@ -306,7 +332,10 @@ export class Battle {
               return "battle_legendary_regis_g6";
             case SpeciesId.GROUDON:
             case SpeciesId.KYOGRE:
-              return "battle_legendary_gro_kyo";
+              if (pokemon.getFormKey() === SpeciesFormKey.PRIMAL) {
+                return "battle_legendary_gro_kyo";
+              }
+              return "battle_legendary_rayquaza";
             case SpeciesId.RAYQUAZA:
               return "battle_legendary_rayquaza";
             case SpeciesId.DEOXYS:
@@ -322,7 +351,7 @@ export class Battle {
               return "battle_legendary_sinnoh";
             case SpeciesId.DIALGA:
             case SpeciesId.PALKIA:
-              if (pokemon.species.getFormSpriteKey(pokemon.formIndex) === SpeciesFormKey.ORIGIN) {
+              if (pokemon.getFormKey() === SpeciesFormKey.ORIGIN) {
                 return "battle_legendary_origin_forme";
               }
               return "battle_legendary_dia_pal";
@@ -351,6 +380,8 @@ export class Battle {
             case SpeciesId.TAPU_BULU:
             case SpeciesId.TAPU_FINI:
               return "battle_legendary_tapu";
+            case SpeciesId.COSMOG:
+            case SpeciesId.COSMOEM:
             case SpeciesId.SOLGALEO:
             case SpeciesId.LUNALA:
               return "battle_legendary_sol_lun";
@@ -401,6 +432,26 @@ export class Battle {
             case SpeciesId.TING_LU:
             case SpeciesId.CHI_YU:
               return "battle_legendary_ruinous";
+            case SpeciesId.GREAT_TUSK:
+            case SpeciesId.SCREAM_TAIL:
+            case SpeciesId.BRUTE_BONNET:
+            case SpeciesId.FLUTTER_MANE:
+            case SpeciesId.SLITHER_WING:
+            case SpeciesId.SANDY_SHOCKS:
+            case SpeciesId.IRON_TREADS:
+            case SpeciesId.IRON_BUNDLE:
+            case SpeciesId.IRON_HANDS:
+            case SpeciesId.IRON_JUGULIS:
+            case SpeciesId.IRON_MOTH:
+            case SpeciesId.IRON_THORNS:
+            case SpeciesId.ROARING_MOON:
+            case SpeciesId.IRON_VALIANT:
+            case SpeciesId.WALKING_WAKE:
+            case SpeciesId.IRON_LEAVES:
+            case SpeciesId.GOUGING_FIRE:
+            case SpeciesId.RAGING_BOLT:
+            case SpeciesId.IRON_BOULDER:
+            case SpeciesId.IRON_CROWN:
             case SpeciesId.KORAIDON:
             case SpeciesId.MIRAIDON:
               return "battle_legendary_kor_mir";
@@ -441,7 +492,6 @@ export class Battle {
     if (range <= 1) {
       return min;
     }
-    const tempRngCounter = globalScene.rngCounter;
     const tempSeedOverride = globalScene.rngSeedOverride;
     const state = Phaser.Math.RND.state();
     if (this.battleSeedState) {
@@ -450,12 +500,10 @@ export class Battle {
       Phaser.Math.RND.sow([shiftCharCodes(this.battleSeed, this.turn << 6)]);
       console.log("Battle Seed:", this.battleSeed);
     }
-    globalScene.rngCounter = this.rngCounter++;
     globalScene.rngSeedOverride = this.battleSeed;
     const ret = randSeedInt(range, min);
     this.battleSeedState = Phaser.Math.RND.state();
     Phaser.Math.RND.state(state);
-    globalScene.rngCounter = tempRngCounter;
     globalScene.rngSeedOverride = tempSeedOverride;
     return ret;
   }
@@ -470,13 +518,12 @@ export class Battle {
 
 export class FixedBattle extends Battle {
   constructor(waveIndex: number, config: FixedBattleConfig) {
-    super(
-      globalScene.gameMode,
+    super(globalScene.gameMode, {
       waveIndex,
-      config.battleType,
-      config.battleType === BattleType.TRAINER ? config.getTrainer() : undefined,
-      config.double,
-    );
+      battleType: config.battleType,
+      trainer: config.battleType === BattleType.TRAINER ? config.getTrainer() : undefined,
+      double: config.double,
+    });
     if (config.getEnemyParty) {
       this.enemyParty = config.getEnemyParty();
     }
@@ -487,14 +534,15 @@ type GetTrainerFunc = () => Trainer;
 type GetEnemyPartyFunc = () => EnemyPokemon[];
 
 export class FixedBattleConfig {
-  public battleType: BattleType;
+  // TODO: All fixed battles are currently trainer battles
+  public battleType: Exclude<BattleType, BattleType.CLEAR>;
   public double: boolean;
   public getTrainer: GetTrainerFunc;
   public getEnemyParty: GetEnemyPartyFunc;
   public seedOffsetWaveIndex: number;
   public customModifierRewardSettings?: CustomModifierSettings;
 
-  setBattleType(battleType: BattleType): FixedBattleConfig {
+  setBattleType(battleType: Exclude<BattleType, BattleType.CLEAR>): FixedBattleConfig {
     this.battleType = battleType;
     return this;
   }

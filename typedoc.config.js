@@ -4,22 +4,29 @@
  *
  * SPDX-License-Identifier: AGPL-3.0-only
  */
+
+/// <reference path="./global.d.ts" />
+
 import { globSync } from "node:fs";
 
 const dryRun = !!process.env.DRY_RUN?.match(/true/gi);
 
 /**
- * <!-- @type {Partial<import("typedoc").TypeDocOptions>} -->
+ * <!-- @satisfies {Partial<import("typedoc").TypeDocOptions>} -->
  */
 const config = {
-  entryPoints: ["./src", "./test/test-utils"],
+  entryPoints: ["./src", "./test/framework", "./test/helpers", "./test/matchers", "./test/utils"],
   entryPointStrategy: "expand",
   exclude: [
     "src/polyfills.ts",
+    "src/extensions.ts",
     "src/vite.env.d.ts",
     "**/*+.test.ts",
-    "test/test-utils/setup",
-    "test/test-utils/reporters",
+    "**/*+.test-d.ts",
+    "test/setup",
+    "test/reporters",
+    "test/@types/matcher-helpers.ts",
+    "test/@types/vitest.d.ts",
   ],
   excludePrivate: false, // Private members are useful in the docs for contributors
   excludeReferences: true, // prevent documenting re-exports
@@ -40,22 +47,26 @@ const config = {
     "typedoc-github-theme",
     "typedoc-plugin-coverage",
     "typedoc-plugin-mdn-links",
-    ...globSync("./typedoc-plugins/**/*.js").map(plugin => "./" + plugin),
+    "typedoc-plugin-missing-exports",
+    ...globSync("./plugins/typedoc/**/*.js").map(plugin => "./" + plugin),
   ],
   // Avoid emitting docs for branches other than main/beta
   emit: dryRun ? "none" : "docs",
   out: process.env.CI ? "/tmp/docs" : "./typedoc",
   name: "PokéRogue",
   readme: "./README.md",
+  projectDocuments: ["docs/*.md", "CONTRIBUTING.md"],
   coverageLabel: "Documented",
   coverageSvgWidth: 120, // Increased from 104 baseline due to adding 2 extra letters
   favicon: "./favicon.ico",
   theme: "typedoc-github-theme",
-  customFooterHtml: "<p>Copyright <strong>Pagefault Games</strong> 2025</p>",
+  customFooterHtml: `<p>Copyright <strong>Pagefault Games</strong> ${new Date().getFullYear() === 2025 ? "2025" : "2025 - " + new Date().getFullYear()}</p>`,
   customFooterHtmlDisableWrapper: true,
   navigationLinks: {
     GitHub: "https://github.com/pagefaultgames/pokerogue",
   },
+  includeDocCommentReferences: true,
+  placeInternalsInOwningModule: true,
 };
 
 // If generating docs for main/beta, check the ref name and add an appropriate navigation header

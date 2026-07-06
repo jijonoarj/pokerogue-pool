@@ -1,8 +1,9 @@
-import "#app/polyfills";
-// All polyfills MUST be loaded first for side effects
+import "#app/polyfills"; // All polyfills MUST be loaded first for side effects
+import "#init/init-manifest"; // initializes the manifest, must be done *before* i18n is initialized due to being used for caching
+import "#app/i18n"; // Initializes i18n on import
 
 import { InvertPostFX } from "#app/pipelines/invert";
-import { initI18n } from "#app/plugins/i18n";
+import { preventDoubleTapZoom } from "#app/touch-controls";
 import { isBeta, isDev } from "#constants/app-constants";
 import { version } from "#package.json";
 import Phaser from "phaser";
@@ -15,61 +16,12 @@ if (isBeta || isDev) {
   document.title += " (Beta)";
 }
 
-// Catch global errors and display them in an alert so users can report the issue.
-window.onerror = (_message, _source, _lineno, _colno, error) => {
-  console.error(error);
-  // const errorString = `Received unhandled error. Open browser console and click OK to see details.\nError: ${message}\nSource: ${source}\nLine: ${lineno}\nColumn: ${colno}\nStack: ${error.stack}`;
-  //alert(errorString);
-  // Avoids logging the error a second time.
-  return true;
-};
+preventDoubleTapZoom();
 
-// Catch global promise rejections and display them in an alert so users can report the issue.
-window.addEventListener("unhandledrejection", event => {
-  // const errorString = `Received unhandled promise rejection. Open browser console and click OK to see details.\nReason: ${event.reason}`;
-  console.error(event.reason);
-  //alert(errorString);
-});
-
-/**
- * Set this object's position relative to another object with a given offset.
- * @param guideObject - The object to base this object's position off of; must have defined
- * x/y co-ordinates, an origin and width/height
- * @param x - The X-position to set, relative to `guideObject`'s `x` value
- * @param y - The Y-position to set, relative to `guideObject`'s `y` value
- * @returns `this`
- */
-function setPositionRelative<T extends Phaser.GameObjects.Components.Transform>(
-  this: T,
-  guideObject: Pick<Phaser.GameObjects.Components.ComputedSize, "width" | "height"> &
-    Pick<Phaser.GameObjects.Components.Transform, "x" | "y"> &
-    Pick<Phaser.GameObjects.Components.Origin, "originX" | "originY">,
-  x: number,
-  y: number,
-): T {
-  const offsetX = guideObject.width * (-0.5 + (0.5 - guideObject.originX));
-  const offsetY = guideObject.height * (-0.5 + (0.5 - guideObject.originY));
-  return this.setPosition(guideObject.x + offsetX + x, guideObject.y + offsetY + y);
-}
-
-Phaser.GameObjects.Container.prototype.setPositionRelative = setPositionRelative;
-Phaser.GameObjects.Sprite.prototype.setPositionRelative = setPositionRelative;
-Phaser.GameObjects.Image.prototype.setPositionRelative = setPositionRelative;
-Phaser.GameObjects.NineSlice.prototype.setPositionRelative = setPositionRelative;
-Phaser.GameObjects.Text.prototype.setPositionRelative = setPositionRelative;
-Phaser.GameObjects.Rectangle.prototype.setPositionRelative = setPositionRelative;
-
-document.fonts.load("16px emerald").then(() => document.fonts.load("10px pkmnems"));
-// biome-ignore lint: TODO
-let game;
-// biome-ignore lint: TODO
-let manifest;
-
-const startGame = async () => {
-  await initI18n();
+async function startGame(): Promise<void> {
   const LoadingScene = (await import("./loading-scene")).LoadingScene;
   const BattleScene = (await import("./battle-scene")).BattleScene;
-  game = new Phaser.Game({
+  const game = new Phaser.Game({
     type: Phaser.WEBGL,
     parent: "app",
     scale: {
@@ -121,22 +73,12 @@ const startGame = async () => {
     version,
   });
   game.sound.pauseOnBlur = false;
-  if (manifest) {
-    game["manifest"] = manifest;
-  }
-};
+}
 
-fetch("/manifest.json")
-  .then(res => res.json())
-  .then(jsonResponse => {
-    manifest = jsonResponse.manifest;
-  })
-  .catch(err => {
-    // Manifest not found (likely local build or path error on live)
-    console.log(`Manifest not found. ${err}`);
-  })
-  .finally(() => {
-    startGame();
-  });
-
-export default game;
+try {
+  await Promise.all([document.fonts.load("16px emerald"), document.fonts.load("10px pkmnems")]);
+} catch (err) {
+  console.error("Error loading fonts:", err);
+} finally {
+  await startGame();
+}

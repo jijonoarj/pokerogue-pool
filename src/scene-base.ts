@@ -1,4 +1,5 @@
 import { coerceArray } from "#utils/array";
+import { getCachedUrl } from "#utils/fetch-utils";
 
 export const legacyCompatibleImages: string[] = [];
 
@@ -13,93 +14,93 @@ export class SceneBase extends Phaser.Scene {
    * height: `180`
    */
   public readonly scaledCanvas = {
-    width: 1920 / 6,
-    height: 1080 / 6,
-  };
+    width: 320, // (1920 / 6)
+    height: 180, // (1080 / 6)
+  } as const;
 
-  getCachedUrl(url: string): string {
-    const manifest = this.game["manifest"];
-    if (manifest) {
-      const timestamp = manifest[`/${url}`];
-      if (timestamp) {
-        url += `?t=${timestamp}`;
+  public init(): void {
+    this.load.on(Phaser.Loader.Events.FILE_LOAD, (file: Phaser.Loader.File) => {
+      if (file.key.endsWith("_legacy")) {
+        const fileKey = file.key.slice(0, -7);
+        legacyCompatibleImages.push(fileKey);
       }
-    }
-    return url;
+    });
   }
 
-  loadImage(key: string, folder: string, filename?: string) {
-    if (!filename) {
-      filename = `${key}.png`;
-    }
-    this.load.image(key, this.getCachedUrl(`images/${folder}/${filename}`));
+  public loadImage(key: string, folder: string, filename = `${key}.png`): this {
+    this.load.image(key, getCachedUrl(`images/${folder}/${filename}`));
     if (folder.startsWith("ui")) {
-      legacyCompatibleImages.push(key);
       folder = folder.replace("ui", "ui/legacy");
-      this.load.image(`${key}_legacy`, this.getCachedUrl(`images/${folder}/${filename}`));
+      this.load.image(`${key}_legacy`, getCachedUrl(`images/${folder}/${filename}`));
     }
+    return this;
   }
 
-  loadSpritesheet(key: string, folder: string, size: number, filename?: string) {
-    if (!filename) {
-      filename = `${key}.png`;
-    }
-    this.load.spritesheet(key, this.getCachedUrl(`images/${folder}/${filename}`), {
+  public loadSpritesheet(key: string, folder: string, size: number, filename = `${key}.png`): this {
+    this.load.spritesheet(key, getCachedUrl(`images/${folder}/${filename}`), {
       frameWidth: size,
       frameHeight: size,
     });
     if (folder.startsWith("ui")) {
-      legacyCompatibleImages.push(key);
       folder = folder.replace("ui", "ui/legacy");
-      this.load.spritesheet(`${key}_legacy`, this.getCachedUrl(`images/${folder}/${filename}`), {
+      this.load.spritesheet(`${key}_legacy`, getCachedUrl(`images/${folder}/${filename}`), {
         frameWidth: size,
         frameHeight: size,
       });
     }
+    return this;
   }
 
-  loadAtlas(key: string, folder: string, filenameRoot?: string) {
-    if (!filenameRoot) {
-      filenameRoot = key;
-    }
+  public loadAtlas(key: string, folder: string, filenameRoot = key): this {
     if (folder) {
       folder += "/";
     }
     this.load.atlas(
       key,
-      this.getCachedUrl(`images/${folder}${filenameRoot}.png`),
-      this.getCachedUrl(`images/${folder}${filenameRoot}.json`),
+      getCachedUrl(`images/${folder}${filenameRoot}.png`),
+      getCachedUrl(`images/${folder}${filenameRoot}.json`),
     );
     if (folder.startsWith("ui")) {
-      legacyCompatibleImages.push(key);
       folder = folder.replace("ui", "ui/legacy");
       this.load.atlas(
         `${key}_legacy`,
-        this.getCachedUrl(`images/${folder}${filenameRoot}.png`),
-        this.getCachedUrl(`images/${folder}${filenameRoot}.json`),
+        getCachedUrl(`images/${folder}${filenameRoot}.png`),
+        getCachedUrl(`images/${folder}${filenameRoot}.json`),
       );
     }
+    return this;
   }
 
-  loadSe(key: string, folder?: string, filenames?: string | string[]) {
-    if (!filenames) {
-      filenames = `${key}.wav`;
-    }
-    if (!folder) {
-      folder = "se/";
-    } else {
-      folder += "/";
-    }
+  public loadSe(key: string, folder = "se", filenames: string | string[] = `${key}.wav`): this {
+    folder += "/";
+
     filenames = coerceArray(filenames);
     for (const f of filenames as string[]) {
-      this.load.audio(folder + key, this.getCachedUrl(`audio/${folder}${f}`));
+      // TODO: Use actual path joining logic
+      this.load.audio(folder + key, getCachedUrl(`audio/${folder}${f}`));
     }
+    return this;
   }
 
-  loadBgm(key: string, filename?: string) {
-    if (!filename) {
-      filename = `${key}.mp3`;
+  public async loadBgm(key: string): Promise<void> {
+    if (this.cache.audio.exists(key)) {
+      return;
     }
-    this.load.audio(key, this.getCachedUrl(`audio/bgm/${filename}`));
+
+    this.load.audio(key, getCachedUrl(`audio/bgm/${key}.mp3`));
+    await new Promise<void>((resolve, reject) => {
+      const onError = (file: Phaser.Loader.File) => {
+        if (file.key === key) {
+          this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+          reject(new Error(`Failed to load BGM: ${key}`));
+        }
+      };
+      this.load.once(`filecomplete-audio-${key}`, () => {
+        this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+        resolve();
+      });
+      this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+      this.load.start();
+    });
   }
 }

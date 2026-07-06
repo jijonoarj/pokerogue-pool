@@ -34,7 +34,6 @@ import {
   setEncounterRewards,
   transitionMysteryEncounterIntroVisuals,
 } from "#mystery-encounters/encounter-phase-utils";
-import { getSpriteKeysFromSpecies } from "#mystery-encounters/encounter-pokemon-utils";
 import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
@@ -46,7 +45,7 @@ import {
 } from "#mystery-encounters/mystery-encounter-requirements";
 import { getRandomPartyMemberFunc, trainerConfigs } from "#trainers/trainer-config";
 import { TrainerPartyCompoundTemplate, TrainerPartyTemplate } from "#trainers/trainer-party-template";
-import type { OptionSelectItem } from "#ui/abstract-option-select-ui-handler";
+import type { OptionSelectItem } from "#ui/base-option-select-ui-handler";
 import { MoveInfoOverlay } from "#ui/move-info-overlay";
 import { randSeedInt, randSeedShuffle } from "#utils/common";
 import i18next from "i18next";
@@ -175,9 +174,28 @@ export const BugTypeSuperfanEncounter: MysteryEncounter = MysteryEncounterBuilde
   )
   .withMaxAllowedEncounters(1)
   .withSceneWaveRangeRequirement(...CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES)
-  .withScenePartySizeRequirement(3, 6)
+  .withScenePartySizeRequirement(3)
   .withMaxAllowedEncounters(1)
-  .withIntroSpriteConfigs([]) // These are set in onInit()
+  .withIntroSpriteConfigs([
+    {
+      species: SpeciesId.VESPIQUEN,
+      spriteKey: "",
+      fileRoot: "",
+      hasShadow: true,
+      repeat: true,
+      x: 35,
+      y: -2,
+      yShadow: -2,
+    },
+    {
+      spriteKey: "bug_type_superfan",
+      fileRoot: "trainer",
+      hasShadow: true,
+      x: -20,
+      y: 5,
+      yShadow: 5,
+    },
+  ])
   .withAutoHideIntroVisuals(false)
   .withIntroDialogue([
     {
@@ -194,55 +212,10 @@ export const BugTypeSuperfanEncounter: MysteryEncounter = MysteryEncounterBuilde
 
     // Bug type superfan trainer config
     const config = getTrainerConfigForWave(globalScene.currentBattle.waveIndex);
-    const spriteKey = config.getSpriteKey();
     encounter.enemyPartyConfigs.push({
       trainerConfig: config,
       female: true,
     });
-
-    let beedrillKeys: { spriteKey: string; fileRoot: string };
-    let butterfreeKeys: { spriteKey: string; fileRoot: string };
-    if (globalScene.currentBattle.waveIndex < WAVE_LEVEL_BREAKPOINTS[3]) {
-      beedrillKeys = getSpriteKeysFromSpecies(SpeciesId.BEEDRILL, false);
-      butterfreeKeys = getSpriteKeysFromSpecies(SpeciesId.BUTTERFREE, false);
-    } else {
-      // Mega Beedrill/Gmax Butterfree
-      beedrillKeys = getSpriteKeysFromSpecies(SpeciesId.BEEDRILL, false, 1);
-      butterfreeKeys = getSpriteKeysFromSpecies(SpeciesId.BUTTERFREE, false, 1);
-    }
-
-    encounter.spriteConfigs = [
-      {
-        spriteKey: beedrillKeys.spriteKey,
-        fileRoot: beedrillKeys.fileRoot,
-        hasShadow: true,
-        repeat: true,
-        isPokemon: true,
-        x: -30,
-        tint: 0.15,
-        y: -4,
-        yShadow: -4,
-      },
-      {
-        spriteKey: butterfreeKeys.spriteKey,
-        fileRoot: butterfreeKeys.fileRoot,
-        hasShadow: true,
-        repeat: true,
-        isPokemon: true,
-        x: 30,
-        tint: 0.15,
-        y: -4,
-        yShadow: -4,
-      },
-      {
-        spriteKey,
-        fileRoot: "trainer",
-        hasShadow: true,
-        x: 4,
-        y: 7,
-        yShadow: 7,
-      },
-    ];
 
     const requiredItems = [
       generateModifierType(modifierTypes.QUICK_CLAW),
@@ -307,7 +280,7 @@ export const BugTypeSuperfanEncounter: MysteryEncounter = MysteryEncounterBuilde
         const encounter = globalScene.currentBattle.mysteryEncounter!;
 
         // Player gets different rewards depending on the number of bug types they have
-        const numBugTypes = globalScene.getPlayerParty().filter(p => p.isOfType(PokemonType.BUG, true)).length;
+        const numBugTypes = globalScene.getPlayerParty().filter(p => p.isOfType(PokemonType.BUG)).length;
         const numBugTypesText = i18next.t(`${namespace}:numBugTypes`, {
           count: numBugTypes,
         });

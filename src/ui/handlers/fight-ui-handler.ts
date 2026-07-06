@@ -231,7 +231,7 @@ export class FightUiHandler extends UiHandler implements InfoToggle {
   }
 
   getCursor(): number {
-    return !this.fieldIndex ? this.cursor : this.cursor2;
+    return this.fieldIndex ? this.cursor2 : this.cursor;
   }
 
   /** @returns TextStyle according to percentage of PP remaining */
@@ -298,10 +298,10 @@ export class FightUiHandler extends UiHandler implements InfoToggle {
     this.moveInfoOverlay.clear();
     const changed = this.getCursor() !== cursor;
     if (changed) {
-      if (!this.fieldIndex) {
-        this.cursor = cursor;
-      } else {
+      if (this.fieldIndex) {
         this.cursor2 = cursor;
+      } else {
+        this.cursor = cursor;
       }
     }
 
@@ -333,12 +333,12 @@ export class FightUiHandler extends UiHandler implements InfoToggle {
     );
     if (pokemonMove.getMove().category === MoveCategory.STATUS) {
       if (effectiveness === 0) {
-        return "0x";
+        return i18next.t("fightUiHandler:effectiveness000");
       }
-      return "1x";
+      return i18next.t("fightUiHandler:effectiveness100");
     }
 
-    return `${effectiveness}x`;
+    return i18next.t("fightUiHandler:effectivenessMultiplier", { effectiveness });
   }
 
   displayMoves() {

@@ -9,7 +9,7 @@ import { UiMode } from "#enums/ui-mode";
 import * as Modifier from "#modifiers/modifier";
 import type { PokemonData } from "#system/pokemon-data";
 import type { SessionSaveData } from "#types/save-data";
-import type { OptionSelectConfig } from "#ui/abstract-option-select-ui-handler";
+import type { OptionSelectConfig } from "#ui/base-option-select-ui-handler";
 import { MessageUiHandler } from "#ui/message-ui-handler";
 import { RunDisplayMode } from "#ui/run-info-ui-handler";
 import { addTextObject } from "#ui/text";
@@ -373,7 +373,7 @@ export class SaveSlotSelectUiHandler extends MessageUiHandler {
     if (!this.cursorObj) {
       this.cursorObj = globalScene.add.container(0, 0);
       const cursorBox = globalScene.add.nineslice(
-        0,
+        1,
         15,
         "select_cursor_highlight_thick",
         undefined,
@@ -397,12 +397,12 @@ export class SaveSlotSelectUiHandler extends MessageUiHandler {
       const hasData = session.hasData && !session.malformed;
       // If the session slot lacks session data, it does not move from its default, central position.
       // Only session slots with session data will move leftwards and have a visible arrow.
-      if (!hasData) {
-        this.cursorObj.setPosition(151, 20 + cursorIncrement);
-        this.sessionSlots[cursorPosition].setPosition(0, cursorIncrement);
-      } else {
+      if (hasData) {
         this.cursorObj.setPosition(145, 20 + cursorIncrement);
         this.sessionSlots[cursorPosition].setPosition(-6, cursorIncrement);
+      } else {
+        this.cursorObj.setPosition(151, 20 + cursorIncrement);
+        this.sessionSlots[cursorPosition].setPosition(0, cursorIncrement);
       }
       this.setArrowVisibility(hasData);
     }
